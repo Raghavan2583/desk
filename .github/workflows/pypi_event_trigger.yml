@@ -1,0 +1,138 @@
+name: PyPI Event — New Version Check
+
+# Polls the PyPI RSS feed every hour.
+# Job 1 (detect): lightweight, no GCP auth — checks if a priority package was updated.
+# Job 2 (refresh): runs only when detect fires or on manual dispatch.
+# pypi_ingest.py skips packages whose version hasn't changed — the second line of defence.
+
+on:
+  schedule:
+    - cron: '13 * * * *'   # :13 past each hour — off the :00/:30 marks
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ── Job 1: detect new versions in PyPI RSS ─────────────────────────────── #
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      triggered: ${{ steps.rss_check.outputs.triggered }}
+
+    steps:
+      - name: Check PyPI RSS for priority package updates
+        id: rss_check
+        run: |
+          python3 << 'PYEOF'
+          import os, sys, xml.etree.ElementTree as ET, urllib.request
+          from datetime import datetime, timezone, timedelta
+
+          # Top PyPI packages most likely to affect downstream risk scores.
+          # The daily_refresh covers all 1000 — this triggers fast re-score for high-impact packages.
+          PRIORITY = {
+              "requests", "numpy", "pandas", "flask", "django", "fastapi", "pydantic",
+              "sqlalchemy", "cryptography", "urllib3", "certifi", "setuptools", "pip",
+              "boto3", "google-cloud-bigquery", "pyarrow", "scikit-learn", "pillow",
+              "tensorflow", "torch", "aiohttp", "httpx", "celery", "redis", "psycopg2",
+              "pymongo", "click", "typer", "rich", "pytest", "black", "mypy", "ruff",
+              "starlette", "uvicorn", "gunicorn", "paramiko", "grpcio", "protobuf",
+              "attrs", "pyyaml", "jinja2", "markupsafe", "werkzeug", "itsdangerous",
+              "charset-normalizer", "idna", "six", "python-dateutil", "pytz",
+          }
+
+          # Cover the current schedule interval plus a buffer for clock skew.
+          cutoff = datetime.now(timezone.utc) - timedelta(minutes=75)
+          github_output = os.environ["GITHUB_OUTPUT"]
+
+          try:
+              feed = urllib.request.urlopen(
+                  "https://pypi.org/rss/updates.xml", timeout=15
+              ).read()
+          except Exception as exc:
+              print(f"RSS fetch failed: {exc} — skipping pipeline trigger")
+              with open(github_output, "a") as f:
+                  f.write("triggered=false\n")
+              sys.exit(0)
+
+          root = ET.fromstring(feed)
+
+          for item in root.findall(".//item"):
+              title = (item.findtext("title") or "").strip()
+              pub   = (item.findtext("pubDate") or "").strip()
+              if not title or not pub:
+                  continue
+              # RSS title format: "package-name 1.2.3"
+              name = title.split()[0].lower().replace("_", "-")
+              if name not in PRIORITY:
+                  continue
+              try:
+                  dt = datetime.strptime(pub, "%a, %d %b %Y %H:%M:%S %z")
+              except ValueError:
+                  continue
+              if dt >= cutoff:
+                  print(f"Priority package updated: {title}")
+                  with open(github_output, "a") as f:
+                      f.write("triggered=true\n")
+                  sys.exit(0)
+
+          print("No priority package updates in RSS — pipeline skipped.")
+          with open(github_output, "a") as f:
+              f.write("triggered=false\n")
+          PYEOF
+
+  # ── Job 2: run PyPI pipeline when a priority package was updated ────────── #
+  refresh:
+    needs: detect
+    if: needs.detect.outputs.triggered == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_DATASET_RAW: desk_raw
+      GCP_DATASET_PROD: desk_prod
+      PYPI_TOP_N: "1000"
+      RISK_SCORE_VERSION: "1"
+      PYTHONPATH: ${{ github.workspace }}
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Decode GCP service account key
+        run: |
+          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 -d > "$RUNNER_TEMP/gcp-key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
+
+      - name: Ingest — PyPI metadata
+        run: python ingestion/pypi_ingest.py
+
+      - name: Transform — dbt build (prod)
+        run: dbt build --target prod --project-dir dbt --profiles-dir dbt
+
+      - name: Score — compute risk scores
+        run: python scoring/risk_score.py
+
+      - name: Export — write static graph JSON
+        run: python export/graph_export.py
+
+      - name: Commit updated graph data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/data/
+          git diff --staged --quiet || git commit -m "chore: event-triggered graph refresh [skip ci]"
+          git push origin HEAD

@@ -1,0 +1,28 @@
+# Secrets — Operator verifies these exist before first commit
+.env
+*service-account*.json
+*-key.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+.pytest_cache/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/.user.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

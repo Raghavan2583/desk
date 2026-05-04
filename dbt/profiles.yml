@@ -1,0 +1,28 @@
+# dbt connection profiles for DESK.
+# Safe to commit — all sensitive values come from environment variables.
+# Local dev: set GOOGLE_APPLICATION_CREDENTIALS to your service account key path.
+# CI (GitHub Actions): google-github-actions/auth sets GOOGLE_APPLICATION_CREDENTIALS automatically.
+# Run dev builds with: dbt build --target dev
+# Run prod builds with: dbt build --target prod
+# Override profiles dir: export DBT_PROFILES_DIR=$(pwd)/dbt
+
+desk:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: "{{ env_var('GCP_DATASET_DEV', 'desk_dev') }}"
+      keyfile: "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
+      threads: 4
+      timeout_seconds: 300
+
+    prod:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: "{{ env_var('GCP_DATASET_PROD', 'desk_prod') }}"
+      keyfile: "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
+      threads: 4
+      timeout_seconds: 300

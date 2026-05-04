@@ -1,0 +1,59 @@
+version: 2
+
+# Schema tests for dbt-built mart models.
+# fact_risk_scores is declared as a source (written by risk_score.py, not dbt).
+# dbt test runs against it after risk_score.py writes each scoring run.
+
+models:
+  - name: dim_packages
+    columns:
+      - name: package_name
+        tests:
+          - not_null
+          - unique
+      - name: is_top_1000
+        tests:
+          - not_null
+
+  - name: dim_maintainers
+    columns:
+      - name: github_repo_url
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_dependencies
+    columns:
+      - name: package_name
+        tests:
+          - not_null
+      - name: dependency_name
+        tests:
+          - not_null
+
+sources:
+  - name: desk_prod_tests
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('GCP_DATASET_PROD', 'desk_prod') }}"
+    tables:
+      - name: fact_risk_scores
+        columns:
+          - name: package_name
+            tests:
+              - not_null
+              - unique
+          - name: risk_score
+            tests:
+              - not_null
+            # Range validation (0.0–10.0) requires dbt-utils expression_is_true.
+            # Add dbt-utils to packages.yml and enable post-MVP.
+          - name: risk_label
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+          - name: trend_direction
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['RISING', 'FALLING', 'STABLE']

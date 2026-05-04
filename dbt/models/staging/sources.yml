@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: desk_raw
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('GCP_DATASET_RAW', 'desk_raw') }}"
+    tables:
+      - name: raw_pypi_packages
+      - name: raw_github_maintainers
+      - name: raw_osv_cves
+      - name: raw_deps_edges
+      - name: raw_deps_dependents
