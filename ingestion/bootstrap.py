@@ -17,6 +17,7 @@ import os
 
 import requests
 from google.cloud import bigquery
+from google.cloud.bigquery import LoadJobConfig, WriteDisposition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -63,9 +64,20 @@ def _seed(packages: list[str], existing: set[str]) -> None:
         {"package_name": p, "priority": 1, "status": "pending", "retry_count": 0}
         for p in new_packages
     ]
-    errors = client.insert_rows_json(_QUEUE_TABLE, rows)
-    if errors:
-        raise RuntimeError("scheduler_queue seed failed: %s" % errors)
+    # Load job (not streaming insert) — rows committed to storage immediately,
+    # allowing DML (mark_running UPDATE) to run in the same pipeline execution.
+    table = client.get_table(_QUEUE_TABLE)
+    job = client.load_table_from_json(
+        rows,
+        _QUEUE_TABLE,
+        job_config=LoadJobConfig(
+            write_disposition=WriteDisposition.WRITE_APPEND,
+            schema=table.schema,
+        ),
+    )
+    job.result()
+    if job.errors:
+        raise RuntimeError("scheduler_queue seed failed: %s" % job.errors)
 
     logger.info("added %d new packages to scheduler_queue", len(new_packages))
 
