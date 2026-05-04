@@ -121,7 +121,7 @@ REFRESH_INTERVAL_HOURS=24          # GitHub check frequency
 
 ## GitHub Actions Secrets Required (Operator configures)
 - GCP_SERVICE_ACCOUNT_KEY — JSON key, base64 encoded
-- GITHUB_TOKEN_1 — Personal access token with repo:read scope
+- GH_TOKEN_1 — Personal access token with repo:read scope
 - GCP_PROJECT_ID
 
 ## Free Tier Limits — Monitor Every Session
