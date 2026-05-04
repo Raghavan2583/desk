@@ -2,6 +2,10 @@
 ingestion/bootstrap.py
 Seeds scheduler_queue with the top-N PyPI packages by download count.
 
+Package list source: hugovk/top-pypi-packages (GitHub Pages JSON).
+This avoids querying bigquery-public-data.pypi.file_downloads, which
+scans hundreds of GB and exceeds BigQuery's free-tier scan quota.
+
 Run once to initialize, then monthly to pick up new entrants.
 Idempotent — skips packages already present in scheduler_queue.
 
@@ -11,6 +15,7 @@ Usage:
 import logging
 import os
 
+import requests
 from google.cloud import bigquery
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -20,29 +25,23 @@ PROJECT_ID   = os.environ["GCP_PROJECT_ID"]
 DATASET_PROD = os.environ.get("GCP_DATASET_PROD", "desk_prod")
 TOP_N        = int(os.environ.get("PYPI_TOP_N", "1000"))
 
+# hugovk/top-pypi-packages — updated monthly, covers top 5,000 packages by downloads.
+# See: https://github.com/hugovk/top-pypi-packages
+_PACKAGES_URL = (
+    "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
+)
+
 client = bigquery.Client(project=PROJECT_ID)
 
 _QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
 
-_TOP_PACKAGES_SQL = """
-SELECT file.project AS package_name, COUNT(*) AS downloads
-FROM `bigquery-public-data.pypi.file_downloads`
-WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-  AND file.project IS NOT NULL
-  AND file.project != ''
-GROUP BY package_name
-ORDER BY downloads DESC
-LIMIT @n
-"""
-
 
 def _fetch_top_packages(n: int) -> list[str]:
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[bigquery.ScalarQueryParameter("n", "INT64", n)]
-    )
-    rows = client.query(_TOP_PACKAGES_SQL, job_config=job_config).result()
-    packages = [row.package_name for row in rows]
-    logger.info("fetched top %d packages from bigquery-public-data", len(packages))
+    response = requests.get(_PACKAGES_URL, timeout=30)
+    response.raise_for_status()
+    rows = response.json().get("rows", [])
+    packages = [row["project"].lower() for row in rows[:n] if row.get("project")]
+    logger.info("fetched top %d packages from hugovk/top-pypi-packages", len(packages))
     return packages
 
 
