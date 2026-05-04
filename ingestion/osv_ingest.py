@@ -196,9 +196,17 @@ def main() -> None:
                                 str(exc), "last_osv_ingest_at")
 
     if rows:
-        insert_errors = client.insert_rows_json(_RAW_TABLE, rows)
-        if insert_errors:
-            raise RuntimeError("BigQuery insert failed: %s" % insert_errors)
+        job = client.load_table_from_json(
+            rows,
+            _RAW_TABLE,
+            job_config=bigquery.LoadJobConfig(
+                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+                schema=client.get_table(_RAW_TABLE).schema,
+            ),
+        )
+        job.result()
+        if job.errors:
+            raise RuntimeError("BigQuery load failed: %s" % job.errors)
         logger.info("inserted %d CVE rows into raw_osv_cves", len(rows))
 
     mark_complete(client, _QUEUE_TABLE, completed, "last_osv_ingest_at")

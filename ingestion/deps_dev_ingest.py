@@ -225,17 +225,25 @@ def main() -> None:
                 mark_error(client, _QUEUE_TABLE, package_name,
                             str(exc), "last_deps_ingest_at")
 
+    def _load(rows: list[dict], table_ref: str, label: str) -> None:
+        job = client.load_table_from_json(
+            rows,
+            table_ref,
+            job_config=bigquery.LoadJobConfig(
+                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+                schema=client.get_table(table_ref).schema,
+            ),
+        )
+        job.result()
+        if job.errors:
+            raise RuntimeError("BigQuery load failed (%s): %s" % (label, job.errors))
+        logger.info("inserted %d rows into %s", len(rows), label)
+
     if edge_rows:
-        errors = client.insert_rows_json(_EDGES_TABLE, edge_rows)
-        if errors:
-            raise RuntimeError("BigQuery insert failed (edges): %s" % errors)
-        logger.info("inserted %d rows into raw_deps_edges", len(edge_rows))
+        _load(edge_rows, _EDGES_TABLE, "raw_deps_edges")
 
     if dependent_rows:
-        errors = client.insert_rows_json(_DEPENDENTS_TABLE, dependent_rows)
-        if errors:
-            raise RuntimeError("BigQuery insert failed (dependents): %s" % errors)
-        logger.info("inserted %d rows into raw_deps_dependents", len(dependent_rows))
+        _load(dependent_rows, _DEPENDENTS_TABLE, "raw_deps_dependents")
 
     mark_complete(client, _QUEUE_TABLE, completed, "last_deps_ingest_at")
 

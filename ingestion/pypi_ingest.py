@@ -184,9 +184,18 @@ def main() -> None:
                 mark_error(client, _QUEUE_TABLE, package, str(exc), "last_pypi_ingest_at")
 
     if rows:
-        insert_errors = client.insert_rows_json(_RAW_TABLE, rows)
-        if insert_errors:
-            raise RuntimeError("BigQuery insert failed: %s" % insert_errors)
+        # Load job — handles large raw_payload rows that exceed streaming insert limits.
+        job = client.load_table_from_json(
+            rows,
+            _RAW_TABLE,
+            job_config=bigquery.LoadJobConfig(
+                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+                schema=client.get_table(_RAW_TABLE).schema,
+            ),
+        )
+        job.result()
+        if job.errors:
+            raise RuntimeError("BigQuery load failed: %s" % job.errors)
         logger.info("inserted %d rows into raw_pypi_packages", len(rows))
 
     mark_complete(client, _QUEUE_TABLE, completed, "last_pypi_ingest_at")
