@@ -5,6 +5,10 @@ on:
     - cron: '7 2 * * *'   # 02:07 UTC daily — off-peak, off the :00/:30 marks
   workflow_dispatch:
 
+concurrency:
+  group: desk-pipeline
+  cancel-in-progress: false   # queue, never cancel a running pipeline
+
 permissions:
   contents: write
 

@@ -162,7 +162,9 @@ def main() -> None:
     skipped = 0
 
     with requests.Session() as session:
-        for package in packages:
+        for i, package in enumerate(packages):
+            if i % 100 == 0:
+                logger.info("progress: %d/%d packages", i, len(packages))
             try:
                 data    = _fetch_pypi(package, session)
                 version = data["info"].get("version")
@@ -170,7 +172,6 @@ def main() -> None:
 
                 if known and known == version:
                     skipped += 1
-                    logger.info("unchanged: %s @ %s", package, version)
                     completed.append(package)
                     continue
 
