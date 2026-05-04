@@ -79,10 +79,20 @@ def _fetch_pypi(package: str, session: requests.Session) -> dict:
     return data
 
 
+_pypistats_rate_limited = False  # abort remaining calls once we hit a 429
+
+
 def _fetch_monthly_downloads(package: str, session: requests.Session) -> int | None:
+    global _pypistats_rate_limited
+    if _pypistats_rate_limited:
+        return None
     url = f"https://pypistats.org/api/packages/{package}/recent"
     try:
-        response = retry_with_backoff(session.get, url, timeout=30)
+        response = session.get(url, timeout=10)
+        if response.status_code == 429:
+            _pypistats_rate_limited = True
+            logger.warning("pypistats rate-limited — skipping downloads for remaining packages")
+            return None
         response.raise_for_status()
         return response.json()["data"]["last_month"]
     except Exception as exc:
