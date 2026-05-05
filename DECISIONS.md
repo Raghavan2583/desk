@@ -78,3 +78,43 @@ DECISION: Each ingestion script validates the API response against a minimal jso
 RATIONALE: Silent schema drift (upstream API renames or removes a field) would write NULL or wrong data with no alert. Minimal schema pattern means upstream can add fields freely without breaking us — we only guard fields we extract. raw_payload already protects historical re-processing. This guards the current run.
 ALERT MECHANISM: GitHub Actions workflow failure triggers email to repo owner by default. No additional tooling needed.
 LOCKED: 2026-05-04
+
+## D016 — Bootstrap Source: hugovk/top-pypi-packages
+DECISION: bootstrap.py fetches top-N packages from hugovk/top-pypi-packages JSON endpoint, not bigquery-public-data.pypi.file_downloads.
+RATIONALE: BQ public dataset query scans 200-400GB per run, exceeding free-tier scan quota on new projects. hugovk provides same top-N list via a lightweight JSON endpoint updated monthly. No scan cost, no billing dependency.
+LOCKED: 2026-05-05
+
+## D017 — Ingestion Writes: Load Jobs Only
+DECISION: All ingestion scripts use client.load_table_from_json() (batch load job), never client.insert_rows_json() (streaming insert).
+RATIONALE: Streaming inserts are blocked in BigQuery free tier. For large raw_payload rows (50-200KB per package), streaming insert requests exceed the 10MB per-request limit and hang indefinitely. Load jobs have no size limit, commit immediately (enabling same-run DML), and are free on any billing tier.
+LOCKED: 2026-05-05
+
+## D018 — Dependency Data Source: requires_dist (not deps.dev)
+DECISION: deps_dev_ingest.py parses requires_dist from raw_pypi_packages to build dependency edges and blast radius counts. deps.dev v3alpha is no longer used.
+RATIONALE: deps.dev v3alpha removed /dependencies endpoint (404 for all PyPI packages) and removed dependentCount from the package endpoint. requires_dist is already in raw_pypi_packages, requires no external API, and produces correct dependency edges within the top-1000 set.
+LOCKED: 2026-05-05
+
+## D019 — OSV Ingestion: Two-Phase Fetch + MODERATE→MEDIUM Mapping
+DECISION: Phase 1 querybatch collects {id, modified} per vuln (minimal data). Phase 2 fetches GET /v1/vulns/{id} per unique ID for full data including severity. Rate-limited at 5 req/s. OSV label "MODERATE" mapped to "MEDIUM" in scoring.
+RATIONALE: querybatch returns summary data only — severity and CVSS are absent. Individual vuln lookups return full data. Deduplication across packages reduces requests from N×vulns to unique_vulns only. OSV uses "MODERATE" where NIST uses "MEDIUM" — without mapping, all MODERATE CVEs scored as 0.
+LOCKED: 2026-05-05
+
+## D020 — GitHub Batch Fault Tolerance: Per-Package Exception Isolation
+DECISION: _execute_batch in github_ingest.py wraps per-package validation in try/except. One schema failure skips that package only — does not abort the remaining repos in the batch.
+RATIONALE: Previous design lost all 50 packages in a batch when any single repo caused a ValidationError. Real-world GitHub repos have edge cases (archived, forked, unusual fields) that should not penalise all co-processed packages.
+LOCKED: 2026-05-05
+
+## D021 — Proactive API Schema Monitoring
+DECISION: schema_monitor.yml runs weekly (Mondays 08:17 UTC). scripts/schema_health_check.py makes lightweight test calls to all upstream APIs (PyPI, OSV querybatch, OSV vuln detail, deps.dev, hugovk) and validates minimal expected fields. Fails loudly on schema drift.
+RATIONALE: D015 is reactive (detects drift only during pipeline runs). Proactive monitoring catches API changes within 7 days regardless of pipeline schedule, giving time to fix before data quality degrades.
+LOCKED: 2026-05-05
+
+## D022 — PackageNode: Card Style
+DECISION: PackageNode renders as a dark rounded-rectangle card (160×64px) containing risk label badge, score, trend arrow, and blast radius count. Edges use smoothstep type; focused-package edges are animated.
+RATIONALE: Circle nodes with external labels were hard to read at scale. Card nodes expose key data directly without requiring hover, match React Flow's standard design language, and are easier to scan in a dense graph.
+LOCKED: 2026-05-05
+
+## D023 — GitHub URL Search Fallback in pypi_ingest
+DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
+RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.
+LOCKED: 2026-05-05

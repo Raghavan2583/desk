@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Develop | Updated: 2026-05-04
+# Phase: Operate | Updated: 2026-05-05
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -27,14 +27,23 @@ Dhoni      : Orchestrator — routes everything, never skips a phase
 Selector   : Project initialised 2026-05-01. Dormant. Reactivates only on re-scoping.
 
 ## Current Phase
-Develop — Increment 12 of 12 remaining
+Operate — DESK is live
+
+## Live URLs
+Frontend : https://frontend-sand-seven-57.vercel.app
+Repo     : https://github.com/Raghavan2583/desk
+Pipeline : daily_refresh.yml — 02:07 UTC daily
+Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-04 — Increments 1–11 complete. Full backend pipeline + React frontend built.
+2026-05-04/05 — Full Deploy phase complete. 8 infra bugs fixed during pipeline bringup.
+Data quality bugs B001/B002/B003 fixed. Card-node UI shipped. DESK live.
 
 ## Next Action
-Striker: Build Increment 12 — GitHub Actions workflows (daily_refresh.yml + pypi_event_trigger.yml).
-Then: Guardian full sign-off on all 12 increments before Deploy phase begins.
+Observer: Monitor next scheduled pipeline run (02:07 UTC 2026-05-06).
+Check GitHub maintainer row count post-run. Target: 600+ unique packages.
+If still low, investigate GraphQL null returns for psf/requests, numpy/numpy, django/django.
+Then Guardian: final sign-off on live system with complete data.
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/
