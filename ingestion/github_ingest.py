@@ -140,13 +140,20 @@ def _build_query(batch: list[tuple[str, str, str]], since_90d: str) -> str:
 
 # ── Rate limiting ─────────────────────────────────────────────────────────── #
 
-def _check_rate_limit(headers: requests.structures.CaseInsensitiveDict) -> None:
+def _check_rate_limit(
+    headers: requests.structures.CaseInsensitiveDict,
+    batch_num: int = 0,
+) -> None:
     remaining = int(headers.get("X-RateLimit-Remaining", 9999))
+    # Log every 5th batch and whenever we get low — gives visibility without noise.
+    if batch_num % 5 == 0 or remaining < RATE_LIMIT_BUFFER:
+        logger.info("GitHub GraphQL rate limit: %d points remaining", remaining)
     if remaining < RATE_LIMIT_BUFFER:
         reset_at   = int(headers.get("X-RateLimit-Reset", 0))
         sleep_secs = max(0, reset_at - int(time.time())) + 5
         logger.warning(
-            "rate limit low (%d remaining) — sleeping %ds until reset",
+            "rate limit low (%d remaining) — sleeping %ds until reset. "
+            "Add a second PAT to the GH_TOKEN_1 array if this recurs.",
             remaining, sleep_secs,
         )
         time.sleep(sleep_secs)
@@ -195,6 +202,7 @@ def _execute_batch(
     token: str,
     since_90d: str,
     ingested_at: str,
+    batch_num: int = 0,
 ) -> tuple[list[dict], list[str]]:
     """
     batch_items: [(package_name, alias, owner, repo_name), ...]
@@ -212,7 +220,7 @@ def _execute_batch(
         timeout=60,
     )
     response.raise_for_status()
-    _check_rate_limit(response.headers)
+    _check_rate_limit(response.headers, batch_num=batch_num)
 
     payload = response.json()
 
@@ -277,11 +285,12 @@ def main() -> None:
     completed: list[str] = []
 
     with requests.Session() as session:
-        for start in range(0, len(batch_items), BATCH_SIZE):
+        for batch_num, start in enumerate(range(0, len(batch_items), BATCH_SIZE)):
             batch = batch_items[start:start + BATCH_SIZE]
             try:
                 batch_rows, batch_completed = _execute_batch(
-                    batch, session, token, since_90d, ingested_at
+                    batch, session, token, since_90d, ingested_at,
+                    batch_num=batch_num,
                 )
                 rows.extend(batch_rows)
                 completed.extend(batch_completed)

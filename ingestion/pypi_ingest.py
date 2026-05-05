@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -34,6 +35,23 @@ client = bigquery.Client(project=PROJECT_ID)
 _RAW_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_pypi_packages"
 _QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
 _DIM_TABLE   = f"{PROJECT_ID}.{DATASET_PROD}.dim_packages"
+
+# ── GitHub Search fallback ────────────────────────────────────────────────── #
+# Used when no GitHub URL is found in PyPI metadata (project_urls / home_page).
+# Requires GITHUB_TOKENS env var. Gracefully skips if unavailable.
+# Rate-limited at 2.1s/req (~28 req/min) — below the 30 req/min authenticated limit.
+
+_GH_SEARCH_URL   = "https://api.github.com/search/repositories"
+_GH_SEARCH_DELAY = 2.1
+_GH_SEARCH_TOKEN: str | None = None
+_gh_search_rate_limited = False  # abort remaining searches after a 429/403
+
+try:
+    from ingestion.utils.token_pool import load_from_env as _load_gh_pool
+    _GH_SEARCH_TOKEN = _load_gh_pool().get()
+    logger.info("GitHub Search fallback enabled (token loaded)")
+except Exception:
+    logger.info("GitHub Search fallback disabled (GITHUB_TOKENS not set)")
 
 PYPI_SCHEMA = {
     "type": "object",
@@ -77,6 +95,38 @@ def _fetch_pypi(package: str, session: requests.Session) -> dict:
     data = response.json()
     validate_response(data, PYPI_SCHEMA, source="pypi")
     return data
+
+
+def _search_github_url(package: str, session: requests.Session) -> str | None:
+    """
+    Fallback: search GitHub for a repo matching the package name.
+    Only called when PyPI metadata contains no GitHub URL.
+    Result stored permanently in raw_pypi_packages on this run.
+    """
+    global _gh_search_rate_limited
+    if _gh_search_rate_limited or not _GH_SEARCH_TOKEN:
+        return None
+    try:
+        headers = {"Authorization": f"Bearer {_GH_SEARCH_TOKEN}"}
+        resp    = session.get(
+            _GH_SEARCH_URL,
+            params={"q": f'"{package}" language:Python mirror:false', "sort": "stars", "per_page": 1},
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code in (403, 429):
+            _gh_search_rate_limited = True
+            logger.warning("GitHub Search rate-limited — URL fallback disabled for remaining packages")
+            return None
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        if items:
+            return _normalize_github_url(items[0].get("html_url", "") or "")
+    except Exception as exc:
+        logger.debug("GitHub Search failed for %s: %s", package, exc)
+    finally:
+        time.sleep(_GH_SEARCH_DELAY)
+    return None
 
 
 _pypistats_rate_limited = False  # abort remaining calls once we hit a 429
@@ -128,7 +178,11 @@ def _extract_github_url(info: dict) -> str | None:
     return None
 
 
-def _build_row(data: dict, monthly_downloads: int | None) -> dict:
+def _build_row(
+    data: dict,
+    monthly_downloads: int | None,
+    github_url: str | None = None,
+) -> dict:
     info = data["info"]
     return {
         "ingested_at":       datetime.now(timezone.utc).isoformat(),
@@ -141,7 +195,7 @@ def _build_row(data: dict, monthly_downloads: int | None) -> dict:
         "requires_dist":     json.dumps(info.get("requires_dist")),
         "project_urls":      json.dumps(info.get("project_urls")),
         "monthly_downloads": monthly_downloads,
-        "github_repo_url":   _extract_github_url(info),
+        "github_repo_url":   github_url if github_url is not None else _extract_github_url(info),
         "raw_payload":       json.dumps(data),
     }
 
@@ -176,7 +230,15 @@ def main() -> None:
                     continue
 
                 downloads = _fetch_monthly_downloads(package, session)
-                rows.append(_build_row(data, downloads))
+
+                # GitHub URL: try PyPI metadata first, fall back to Search API.
+                # The discovered URL is stored in this row — once written to
+                # raw_pypi_packages it persists on future runs without re-searching.
+                gh_url = _extract_github_url(data["info"])
+                if not gh_url:
+                    gh_url = _search_github_url(package, session)
+
+                rows.append(_build_row(data, downloads, github_url=gh_url))
                 completed.append(package)
 
             except Exception as exc:
