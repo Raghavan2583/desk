@@ -47,7 +47,6 @@ export default function GraphCanvas({
       data: {
         ...n.data,
         isFocused: n.id === focusedPackage,
-        nodeSize:  nodeSize(n.data?.blast_radius_count ?? 0),
       },
       position: { x: 0, y: 0 },
     }))
@@ -56,8 +55,9 @@ export default function GraphCanvas({
       id:          e.id,
       source:      e.source,
       target:      e.target,
-      style:       { stroke: C.border, strokeWidth: 2 },
-      animated:    false,
+      type:        'smoothstep',
+      style:       { stroke: C.accent + '55', strokeWidth: 1.5 },
+      animated:    e.source === focusedPackage || e.target === focusedPackage,
     }))
 
     const laidOut = applyDagreLayout(rfNodes, rfEdges)

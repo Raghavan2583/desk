@@ -1,17 +1,17 @@
 """
 ingestion/deps_dev_ingest.py
-Fetches dependency edges and dependent counts from deps.dev.
-Two API calls per package — sequential (no batching available for this API).
+Derives dependency edges and blast radius counts from requires_dist data
+already present in raw_pypi_packages. No external API calls required.
 
-  API 1: GET /v3alpha/systems/PYPI/packages/{name}/versions/{version}/dependencies
-         → raw_deps_edges (one row per dependency node)
+Previous approach used deps.dev v3alpha, which removed dependentCount from
+its package endpoint and returns 404 for all PyPI dependency lookups. Replaced
+with in-process parsing of PyPI requires_dist — more reliable, no API quota,
+no future schema drift risk.
 
-  API 2: GET /v3alpha/systems/PYPI/packages/{name}
-         → raw_deps_dependents (one row per package — global dependent count)
-
-404 responses mean the package is not yet indexed by deps.dev.
-These are treated as "no data" (marked complete, no rows written) rather than errors,
-since 404 never resolves and would trap the package in error state permanently.
+Writes:
+  raw_deps_edges       — one row per direct dependency within the top-1000 set
+  raw_deps_dependents  — one row per package with its blast radius count
+                         (count of top-1000 packages that depend on it)
 
 Usage:
     GCP_PROJECT_ID=<id> python ingestion/deps_dev_ingest.py
@@ -19,15 +19,11 @@ Usage:
 import json
 import logging
 import os
-import urllib.parse
+import re
 from datetime import datetime, timezone
 
-import requests
 from google.cloud import bigquery
-
-from ingestion.utils.backoff import retry_with_backoff
-from ingestion.utils.queue import mark_complete, mark_error, mark_running
-from ingestion.utils.validation import validate_response
+from google.cloud.bigquery import LoadJobConfig, WriteDisposition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -40,217 +36,136 @@ client = bigquery.Client(project=PROJECT_ID)
 
 _EDGES_TABLE      = f"{PROJECT_ID}.{DATASET_RAW}.raw_deps_edges"
 _DEPENDENTS_TABLE = f"{PROJECT_ID}.{DATASET_RAW}.raw_deps_dependents"
-_QUEUE_TABLE      = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
-_DIM_TABLE        = f"{PROJECT_ID}.{DATASET_PROD}.dim_packages"
 _RAW_PYPI_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_pypi_packages"
 
-DEPS_DEV_BASE = "https://api.deps.dev/v3alpha/systems/PYPI/packages"
+# PEP 508 package name pattern — stops at extras bracket, version spec, or env marker
+_PKG_NAME_RE = re.compile(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)')
 
-DEPS_DEV_DEPS_SCHEMA = {
-    "type": "object",
-    "required": ["nodes"],
-    "properties": {"nodes": {"type": "array"}},
-}
 
-DEPS_DEV_PACKAGE_SCHEMA = {
-    "type": "object",
-    "required": ["defaultVersion"],
-    "properties": {
-        "defaultVersion": {
-            "type": "object",
-            "required": ["dependentCount"],
-            "properties": {"dependentCount": {"type": "integer"}},
-        }
-    },
-}
+def _normalize(name: str) -> str:
+    """PEP 503 canonical name: lowercase, collapse [-_.] runs to a hyphen."""
+    return re.sub(r'[-_.]+', '-', name).lower()
 
-# ── Data loading ─────────────────────────────────────────────────────────── #
 
-def _load_packages_with_versions() -> dict[str, str]:
-    """
-    Returns {package_name: latest_version}.
-    Tries dim_packages first, falls back to raw_pypi_packages on initial run.
-    """
-    try:
-        query = f"""
-            SELECT package_name, latest_version FROM `{_DIM_TABLE}`
-            WHERE latest_version IS NOT NULL
-        """
-        result = {row.package_name: row.latest_version
-                  for row in client.query(query).result()}
-        if result:
-            logger.info("loaded %d package versions from dim_packages", len(result))
-            return result
-    except Exception as exc:
-        logger.warning("dim_packages not available: %s", exc)
+def _parse_dep_name(spec: str) -> str | None:
+    m = _PKG_NAME_RE.match(spec.strip())
+    return _normalize(m.group(1)) if m else None
 
-    logger.info("falling back to raw_pypi_packages for package versions")
+
+def _load_requires_dist() -> dict[str, tuple[str, list[str]]]:
+    """Returns {package_name: (latest_version, [requirement_spec, ...])}."""
     query = f"""
-        SELECT package_name, latest_version FROM (
-            SELECT package_name, latest_version,
+        SELECT package_name, latest_version, requires_dist
+        FROM (
+            SELECT package_name, latest_version, requires_dist,
                    ROW_NUMBER() OVER (PARTITION BY package_name ORDER BY ingested_at DESC) AS rn
             FROM `{_RAW_PYPI_TABLE}`
-            WHERE latest_version IS NOT NULL
-        ) WHERE rn = 1
+        )
+        WHERE rn = 1
     """
-    result = {row.package_name: row.latest_version
-              for row in client.query(query).result()}
-    logger.info("loaded %d package versions from raw_pypi_packages", len(result))
+    result: dict[str, tuple[str, list[str]]] = {}
+    for row in client.query(query).result():
+        version = row.latest_version or ""
+        specs: list[str] = []
+        if row.requires_dist:
+            try:
+                specs = json.loads(row.requires_dist) or []
+            except (json.JSONDecodeError, TypeError):
+                pass
+        result[row.package_name] = (version, specs)
+    logger.info("loaded requires_dist for %d packages", len(result))
     return result
 
-# ── API helpers ──────────────────────────────────────────────────────────── #
 
-def _get(url: str, session: requests.Session) -> dict | None:
-    """
-    GET url with backoff. Returns parsed JSON or None if 404.
-    All other errors propagate to the caller.
-    """
-    try:
-        response = retry_with_backoff(session.get, url, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as exc:
-        if exc.response is not None and exc.response.status_code == 404:
-            return None
-        raise
-
-
-def _fetch_dependencies(
-    package: str, version: str, session: requests.Session
-) -> dict | None:
-    encoded_version = urllib.parse.quote(version, safe="")
-    url = f"{DEPS_DEV_BASE}/{package}/versions/{encoded_version}/dependencies"
-    data = _get(url, session)
-    if data is not None:
-        validate_response(data, DEPS_DEV_DEPS_SCHEMA, source="deps.dev.deps")
-    return data
-
-
-def _fetch_package(package: str, session: requests.Session) -> dict | None:
-    url = f"{DEPS_DEV_BASE}/{package}"
-    data = _get(url, session)
-    if data is not None:
-        validate_response(data, DEPS_DEV_PACKAGE_SCHEMA, source="deps.dev.package")
-    return data
-
-# ── Row builders ─────────────────────────────────────────────────────────── #
-
-def _build_edge_rows(
-    package_name: str,
-    version: str,
-    deps_data: dict,
+def _build_edges_and_counts(
+    packages: dict[str, tuple[str, list[str]]],
     ingested_at: str,
-) -> list[dict]:
-    rows = []
-    for node in deps_data.get("nodes") or []:
-        relation = node.get("relation", "")
-        if relation == "SELF":
-            continue
+) -> tuple[list[dict], list[dict]]:
+    """
+    Returns (edge_rows, dependent_rows).
+    Only edges where both source and target are in the top-1000 set are written.
+    """
+    watched = set(packages.keys())
+    edge_rows: list[dict] = []
+    dep_counts: dict[str, int] = {}
 
-        version_key = node.get("versionKey") or {}
-        dep_name    = (version_key.get("name") or "").lower()
-        dep_version = version_key.get("version") or ""
+    for pkg_name, (version, specs) in packages.items():
+        seen: set[str] = set()
 
-        if not dep_name:
-            continue
+        for spec in specs:
+            dep_name = _parse_dep_name(spec)
+            if not dep_name or dep_name == pkg_name or dep_name not in watched:
+                continue
+            if dep_name in seen:
+                continue
+            seen.add(dep_name)
 
-        rows.append({
-            "ingested_at":                   ingested_at,
-            "package_name":                  package_name,
-            "version":                       version,
-            "dependency_name":               dep_name,
-            "dependency_version_constraint": dep_version,  # resolved version
-            "depth_level":                   1 if relation == "DIRECT" else 2,
-            "raw_payload":                   json.dumps(node),
-        })
-    return rows
+            # Extract version constraint (between name+extras and env marker)
+            constraint = re.sub(r'^[A-Za-z0-9._-]+\s*(?:\[.*?\])?\s*', '', spec)
+            constraint = constraint.split(';')[0].strip()
+
+            edge_rows.append({
+                "ingested_at":                   ingested_at,
+                "package_name":                  pkg_name,
+                "version":                       version,
+                "dependency_name":               dep_name,
+                "dependency_version_constraint": constraint,
+                "depth_level":                   1,
+                "raw_payload":                   json.dumps({"spec": spec}),
+            })
+            dep_counts[dep_name] = dep_counts.get(dep_name, 0) + 1
+
+    dependent_rows = [
+        {
+            "ingested_at":     ingested_at,
+            "package_name":    pkg,
+            "dependent_count": count,
+            "raw_payload":     json.dumps({"source": "requires_dist", "count": count}),
+        }
+        for pkg, count in dep_counts.items()
+    ]
+
+    logger.info(
+        "edges: %d  packages_with_dependents: %d",
+        len(edge_rows), len(dependent_rows),
+    )
+    return edge_rows, dependent_rows
 
 
-def _build_dependent_row(
-    package_name: str,
-    package_data: dict,
-    ingested_at: str,
-) -> dict:
-    default_version  = package_data.get("defaultVersion") or {}
-    dependent_count  = default_version.get("dependentCount", 0)
-    return {
-        "ingested_at":    ingested_at,
-        "package_name":   package_name,
-        "dependent_count": dependent_count,
-        "raw_payload":    json.dumps(package_data),
-    }
+def _load_bq(rows: list[dict], table_ref: str, label: str) -> None:
+    table = client.get_table(table_ref)
+    job = client.load_table_from_json(
+        rows,
+        table_ref,
+        job_config=LoadJobConfig(
+            write_disposition=WriteDisposition.WRITE_APPEND,
+            schema=table.schema,
+        ),
+    )
+    job.result()
+    if job.errors:
+        raise RuntimeError("BigQuery load failed (%s): %s" % (label, job.errors))
+    logger.info("inserted %d rows into %s", len(rows), label)
 
-# ── Main ─────────────────────────────────────────────────────────────────── #
 
 def main() -> None:
     logger.info("deps_dev_ingest starting — project=%s", PROJECT_ID)
+    ingested_at = datetime.now(timezone.utc).isoformat()
 
-    packages_with_versions = _load_packages_with_versions()
-    ingested_at            = datetime.now(timezone.utc).isoformat()
-    all_packages           = list(packages_with_versions.keys())
-
-    mark_running(client, _QUEUE_TABLE, all_packages)
-
-    edge_rows: list[dict]      = []
-    dependent_rows: list[dict] = []
-    completed: list[str]       = []
-    not_indexed                = 0
-
-    with requests.Session() as session:
-        for package_name, version in packages_with_versions.items():
-            try:
-                deps_data    = _fetch_dependencies(package_name, version, session)
-                package_data = _fetch_package(package_name, session)
-
-                if deps_data is None and package_data is None:
-                    logger.info("not indexed in deps.dev: %s", package_name)
-                    not_indexed += 1
-                    completed.append(package_name)
-                    continue
-
-                if deps_data is not None:
-                    rows = _build_edge_rows(package_name, version, deps_data, ingested_at)
-                    edge_rows.extend(rows)
-                    logger.info("%-40s %d dep(s)", package_name, len(rows))
-
-                if package_data is not None:
-                    dependent_rows.append(
-                        _build_dependent_row(package_name, package_data, ingested_at)
-                    )
-
-                completed.append(package_name)
-
-            except Exception as exc:
-                logger.error("failed: %s — %s", package_name, exc)
-                mark_error(client, _QUEUE_TABLE, package_name,
-                            str(exc), "last_deps_ingest_at")
-
-    def _load(rows: list[dict], table_ref: str, label: str) -> None:
-        job = client.load_table_from_json(
-            rows,
-            table_ref,
-            job_config=bigquery.LoadJobConfig(
-                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-                schema=client.get_table(table_ref).schema,
-            ),
-        )
-        job.result()
-        if job.errors:
-            raise RuntimeError("BigQuery load failed (%s): %s" % (label, job.errors))
-        logger.info("inserted %d rows into %s", len(rows), label)
+    packages = _load_requires_dist()
+    edge_rows, dependent_rows = _build_edges_and_counts(packages, ingested_at)
 
     if edge_rows:
-        _load(edge_rows, _EDGES_TABLE, "raw_deps_edges")
+        _load_bq(edge_rows, _EDGES_TABLE, "raw_deps_edges")
+    else:
+        logger.warning("no edges found — requires_dist may be empty or unparseable")
 
     if dependent_rows:
-        _load(dependent_rows, _DEPENDENTS_TABLE, "raw_deps_dependents")
-
-    mark_complete(client, _QUEUE_TABLE, completed, "last_deps_ingest_at")
+        _load_bq(dependent_rows, _DEPENDENTS_TABLE, "raw_deps_dependents")
 
     logger.info(
-        "deps_dev_ingest complete — edges=%d dependents=%d not_indexed=%d errors=%d",
-        len(edge_rows), len(dependent_rows), not_indexed,
-        len(all_packages) - len(completed),
+        "deps_dev_ingest complete — edges=%d dependents=%d",
+        len(edge_rows), len(dependent_rows),
     )
 
 

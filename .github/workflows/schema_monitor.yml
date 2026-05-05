@@ -1,0 +1,27 @@
+name: API Schema Health Check
+
+# Proactive weekly check — independent of the data pipeline.
+# Fails loudly (email to repo owner) if any upstream API changes its schema.
+# Complements D015 reactive validation inside each ingestion script.
+
+on:
+  schedule:
+    - cron: '17 8 * * 1'   # Monday 08:17 UTC — off the :00/:30 marks
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run schema health check
+        run: python scripts/schema_health_check.py

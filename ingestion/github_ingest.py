@@ -231,9 +231,17 @@ def _execute_batch(
                            owner, repo_name, package_name)
             completed.append(package_name)  # processed — no row written
             continue
-        validate_response(repo_data, GITHUB_REPO_SCHEMA, source="github")
-        rows.append(_build_row(package_name, owner, repo_name, repo_data, ingested_at))
-        completed.append(package_name)
+        # Per-package try/except: one bad repo schema must not abort the whole batch.
+        try:
+            validate_response(repo_data, GITHUB_REPO_SCHEMA, source="github")
+            rows.append(_build_row(package_name, owner, repo_name, repo_data, ingested_at))
+            completed.append(package_name)
+        except Exception as exc:
+            logger.error(
+                "schema validation failed for %s/%s (package: %s): %s",
+                owner, repo_name, package_name, exc,
+            )
+            completed.append(package_name)  # skip this package, keep the batch moving
 
     return rows, completed
 

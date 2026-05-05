@@ -3,8 +3,14 @@ ingestion/osv_ingest.py
 Fetches CVE/vulnerability data from OSV.dev for all tracked packages.
 Writes one row per vulnerability to raw_osv_cves.
 
-Packages with no CVEs produce no rows — absence = no CVEs = cve_component = 0
-in the risk scoring formula (ARCH.md Section 4).
+Two-phase approach:
+  Phase 1 — POST /v1/querybatch: fast, returns {id, modified} only per vuln.
+             Collects (package, vuln_id) pairs across all packages.
+  Phase 2 — GET /v1/vulns/{id} per unique vuln ID: returns full data including
+             severity and CVSS. Deduplicated so shared CVEs are fetched once.
+             Rate-limited at 5 req/s with exponential backoff on 429.
+
+Packages with no CVEs produce no rows — cve_component = 0 in risk scoring.
 
 Usage:
     GCP_PROJECT_ID=<id> python ingestion/osv_ingest.py
@@ -12,6 +18,7 @@ Usage:
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -33,20 +40,27 @@ client = bigquery.Client(project=PROJECT_ID)
 _RAW_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_osv_cves"
 _QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
 
-BATCH_SIZE      = 100
-OSV_BATCH_URL   = "https://api.osv.dev/v1/querybatch"
+BATCH_SIZE        = 100
+OSV_BATCH_URL     = "https://api.osv.dev/v1/querybatch"
+OSV_VULN_BASE_URL = "https://api.osv.dev/v1/vulns"
+OSV_REQ_DELAY     = 0.2   # 5 req/s — safe rate for OSV's unauthenticated endpoint
 
 OSV_BATCH_SCHEMA = {
     "type": "object",
     "required": ["results"],
-    "properties": {
-        "results": {"type": "array"},
-    },
+    "properties": {"results": {"type": "array"}},
 }
 
-# ── Severity helpers ─────────────────────────────────────────────────────── #
+# OSV uses "MODERATE" for what NIST calls "MEDIUM".
+_SEVERITY_MAP = {
+    "CRITICAL": "CRITICAL",
+    "HIGH":     "HIGH",
+    "MODERATE": "MEDIUM",
+    "MEDIUM":   "MEDIUM",
+    "LOW":      "LOW",
+    "NONE":     "NONE",
+}
 
-# CVSS v3 base score → severity label (NIST standard thresholds)
 _CVSS_THRESHOLDS = [
     (9.0, "CRITICAL"),
     (7.0, "HIGH"),
@@ -55,17 +69,12 @@ _CVSS_THRESHOLDS = [
     (0.0, "NONE"),
 ]
 
+# ── Severity helpers ─────────────────────────────────────────────────────── #
 
 def _parse_severity(vuln: dict) -> tuple[str | None, float | None]:
-    """
-    Returns (severity_label, cvss_score).
-    Label comes from database_specific.severity (present in most GHSA entries).
-    Numeric score comes from severity[].score if it is a direct float.
-    If only a label is available, score is None. If only a score is available,
-    label is derived from CVSS thresholds.
-    """
     db_specific = vuln.get("database_specific") or {}
-    label: str | None = (db_specific.get("severity") or "").upper() or None
+    raw_label   = (db_specific.get("severity") or "").upper()
+    label       = _SEVERITY_MAP.get(raw_label)
 
     cvss_score: float | None = None
     for sev in vuln.get("severity") or []:
@@ -74,7 +83,7 @@ def _parse_severity(vuln: dict) -> tuple[str | None, float | None]:
             cvss_score = float(raw_score)
             break
         except (ValueError, TypeError):
-            pass  # CVSS vector strings like "CVSS:3.1/AV:N/..." are not floats
+            pass  # CVSS vector strings (e.g. "CVSS:3.1/AV:N/...") are not floats
 
     if label is None and cvss_score is not None:
         for threshold, derived_label in _CVSS_THRESHOLDS:
@@ -105,51 +114,67 @@ def _extract_affected_ranges(affected: list) -> list:
 
 # ── Row builder ──────────────────────────────────────────────────────────── #
 
-def _build_rows(package_name: str, vulns: list, ingested_at: str) -> list[dict]:
-    rows = []
-    for vuln in vulns:
-        severity_label, cvss_score = _parse_severity(vuln)
-        affected = vuln.get("affected") or []
-        rows.append({
-            "ingested_at":       ingested_at,
-            "package_name":      package_name,
-            "osv_id":            vuln["id"],
-            "severity":          severity_label,
-            "cvss_score":        cvss_score,
-            "published_at":      vuln.get("published"),
-            "modified_at":       vuln.get("modified"),
-            "is_withdrawn":      "withdrawn" in vuln,
-            "aliases":           json.dumps(vuln.get("aliases") or []),
-            "affected_versions": json.dumps(_extract_affected_ranges(affected)),
-            "fixed_in_version":  _extract_fixed_version(affected),
-            "raw_payload":       json.dumps(vuln),
-        })
-    return rows
-
-# ── Batch execution ──────────────────────────────────────────────────────── #
-
-def _query_batch(
-    batch: list[str],
-    session: requests.Session,
-) -> list[dict]:
-    """POST querybatch for up to BATCH_SIZE packages. Returns raw response JSON."""
-    body = {
-        "queries": [
-            {"package": {"name": p, "ecosystem": "PyPI"}} for p in batch
-        ]
+def _build_row(package_name: str, vuln: dict, ingested_at: str) -> dict:
+    severity_label, cvss_score = _parse_severity(vuln)
+    affected = vuln.get("affected") or []
+    return {
+        "ingested_at":       ingested_at,
+        "package_name":      package_name,
+        "osv_id":            vuln["id"],
+        "severity":          severity_label,
+        "cvss_score":        cvss_score,
+        "published_at":      vuln.get("published"),
+        "modified_at":       vuln.get("modified"),
+        "is_withdrawn":      "withdrawn" in vuln,
+        "aliases":           json.dumps(vuln.get("aliases") or []),
+        "affected_versions": json.dumps(_extract_affected_ranges(affected)),
+        "fixed_in_version":  _extract_fixed_version(affected),
+        "raw_payload":       json.dumps(vuln),
     }
-    response = retry_with_backoff(
-        session.post,
-        OSV_BATCH_URL,
-        json=body,
-        timeout=60,
-    )
+
+# ── Phase 1: querybatch ───────────────────────────────────────────────────── #
+
+def _query_batch(batch: list[str], session: requests.Session) -> list[dict]:
+    body = {"queries": [{"package": {"name": p, "ecosystem": "PyPI"}} for p in batch]}
+    response = retry_with_backoff(session.post, OSV_BATCH_URL, json=body, timeout=60)
     response.raise_for_status()
     data = response.json()
     validate_response(data, OSV_BATCH_SCHEMA, source="osv")
     return data["results"]
 
-# ── Queue helpers ─────────────────────────────────────────────────────────── #
+# ── Phase 2: individual vuln detail fetch ─────────────────────────────────── #
+
+def _fetch_vuln_details(
+    vuln_ids: list[str],
+    session: requests.Session,
+) -> dict[str, dict]:
+    """
+    Fetches full vuln data for each unique ID. Rate-limited at OSV_REQ_DELAY seconds
+    between requests. Returns {vuln_id: full_vuln_dict}.
+    """
+    cache: dict[str, dict] = {}
+    total = len(vuln_ids)
+    logger.info("fetching full data for %d unique CVE IDs", total)
+
+    for i, vuln_id in enumerate(vuln_ids):
+        if i % 50 == 0:
+            logger.info("vuln details: %d/%d", i, total)
+        try:
+            resp = retry_with_backoff(
+                session.get,
+                f"{OSV_VULN_BASE_URL}/{vuln_id}",
+                timeout=15,
+            )
+            resp.raise_for_status()
+            cache[vuln_id] = resp.json()
+        except Exception as exc:
+            logger.warning("failed to fetch vuln %s: %s", vuln_id, exc)
+        time.sleep(OSV_REQ_DELAY)
+
+    logger.info("fetched %d/%d vuln details successfully", len(cache), total)
+    return cache
+
+# ── Queue helper ──────────────────────────────────────────────────────────── #
 
 def _load_queue() -> list[str]:
     query = f"SELECT package_name FROM `{_QUEUE_TABLE}` ORDER BY package_name"
@@ -165,9 +190,10 @@ def main() -> None:
 
     mark_running(client, _QUEUE_TABLE, packages)
 
-    rows: list[dict]     = []
+    # Phase 1: collect (package_name, vuln_id) pairs via querybatch
+    pkg_vuln_pairs: list[tuple[str, str]] = []
     completed: list[str] = []
-    no_cve_count         = 0
+    no_cve_count = 0
 
     with requests.Session() as session:
         for start in range(0, len(packages), BATCH_SIZE):
@@ -183,17 +209,31 @@ def main() -> None:
                     vulns = result.get("vulns") or []
                     if not vulns:
                         no_cve_count += 1
-                        completed.append(package_name)
-                        continue
-                    package_rows = _build_rows(package_name, vulns, ingested_at)
-                    rows.extend(package_rows)
+                    else:
+                        for v in vulns:
+                            pkg_vuln_pairs.append((package_name, v["id"]))
                     completed.append(package_name)
-                    logger.info("%-40s %d CVE(s)", package_name, len(package_rows))
             except Exception as exc:
-                logger.error("batch %d–%d failed: %s", start, start + len(batch) - 1, exc)
+                logger.error("querybatch %d–%d failed: %s", start, start + len(batch) - 1, exc)
                 for package_name in batch:
                     mark_error(client, _QUEUE_TABLE, package_name,
-                                str(exc), "last_osv_ingest_at")
+                               str(exc), "last_osv_ingest_at")
+
+        logger.info(
+            "phase 1 complete — packages=%d no_cve=%d vuln_refs=%d",
+            len(packages), no_cve_count, len(pkg_vuln_pairs),
+        )
+
+        # Phase 2: deduplicate IDs and fetch full vuln data
+        unique_ids   = list({vid for _, vid in pkg_vuln_pairs})
+        vuln_details = _fetch_vuln_details(unique_ids, session)
+
+    # Build rows using full vuln data
+    rows: list[dict] = []
+    for package_name, vuln_id in pkg_vuln_pairs:
+        full = vuln_details.get(vuln_id)
+        if full:
+            rows.append(_build_row(package_name, full, ingested_at))
 
     if rows:
         job = client.load_table_from_json(
@@ -212,8 +252,9 @@ def main() -> None:
     mark_complete(client, _QUEUE_TABLE, completed, "last_osv_ingest_at")
 
     logger.info(
-        "osv_ingest complete — cve_rows=%d no_cve=%d errors=%d",
-        len(rows), no_cve_count, len(packages) - len(completed),
+        "osv_ingest complete — cve_rows=%d unique_cves=%d no_cve=%d errors=%d",
+        len(rows), len(unique_ids), no_cve_count,
+        len(packages) - len(completed),
     )
 
 

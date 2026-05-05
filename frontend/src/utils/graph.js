@@ -1,9 +1,8 @@
 import dagre from 'dagre'
+import { NODE_WIDTH, NODE_HEIGHT } from '../components/PackageNode'
 
-export function nodeSize(blastRadius) {
-  const min = 36, max = 80
-  return min + (max - min) * Math.min((blastRadius || 0) / 200, 1) ** 0.5
-}
+// nodeSize kept for any legacy callers — cards use fixed NODE_WIDTH/NODE_HEIGHT
+export function nodeSize() { return NODE_WIDTH }
 
 /**
  * Returns the subset of nodes and edges visible in the current view.
@@ -44,11 +43,10 @@ export function getVisibleSubgraph(graphData, focusedId, expandedIds = new Set()
 export function applyDagreLayout(rfNodes, rfEdges) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 120 })
+  g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 80 })
 
   rfNodes.forEach(node => {
-    const size = node.data?.nodeSize ?? 48
-    g.setNode(node.id, { width: size, height: size })
+    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
   })
   rfEdges.forEach(edge => {
     g.setEdge(edge.source, edge.target)
@@ -57,13 +55,12 @@ export function applyDagreLayout(rfNodes, rfEdges) {
   dagre.layout(g)
 
   return rfNodes.map(node => {
-    const pos  = g.node(node.id)
-    const size = node.data?.nodeSize ?? 48
+    const pos = g.node(node.id)
     return {
       ...node,
       position: {
-        x: pos.x - size / 2,
-        y: pos.y - size / 2,
+        x: pos.x - NODE_WIDTH  / 2,
+        y: pos.y - NODE_HEIGHT / 2,
       },
     }
   })
