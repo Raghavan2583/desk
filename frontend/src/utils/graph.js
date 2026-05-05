@@ -45,7 +45,8 @@ export function getVisibleSubgraph(graphData, focusedId, expandedIds = new Set()
     .map(id => nodeMap[id])
 
   const edges = graphData.edges.filter(
-    e => finalVisible.has(e.source) && finalVisible.has(e.target)
+    e => (e.source === focusedId || e.target === focusedId)
+      && finalVisible.has(e.source) && finalVisible.has(e.target)
   )
 
   return { nodes, edges, totalNeighborCount, isCapped }
