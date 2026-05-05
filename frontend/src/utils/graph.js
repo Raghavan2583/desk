@@ -1,16 +1,22 @@
 import dagre from 'dagre'
 import { NODE_WIDTH, NODE_HEIGHT } from '../components/PackageNode'
 
+const MAX_VISIBLE_NEIGHBORS = 15
+
+export const COL_CENTER_X = 380   // horizontal distance from focal center to each side column center
+export const V_GAP        = 80    // vertical gap between nodes in a column
+
 // nodeSize kept for any legacy callers — cards use fixed NODE_WIDTH/NODE_HEIGHT
 export function nodeSize() { return NODE_WIDTH }
 
 /**
  * Returns the subset of nodes and edges visible in the current view.
- * Always includes focusedId + its direct neighbors.
+ * Always includes focusedId + its direct neighbors (capped at MAX_VISIBLE_NEIGHBORS,
+ * sorted by blast_radius_count desc so the most impactful show first).
  * expandedIds is a Set of additional packages whose neighbors are also shown.
  */
 export function getVisibleSubgraph(graphData, focusedId, expandedIds = new Set()) {
-  if (!graphData || !focusedId) return { nodes: [], edges: [] }
+  if (!graphData || !focusedId) return { nodes: [], edges: [], totalNeighborCount: 0, isCapped: false }
 
   const nodeMap = Object.fromEntries(graphData.nodes.map(n => [n.id, n]))
   const visible  = new Set([focusedId])
@@ -25,15 +31,79 @@ export function getVisibleSubgraph(graphData, focusedId, expandedIds = new Set()
     }
   }
 
-  const nodes = [...visible]
+  const neighborIds = [...visible].filter(id => id !== focusedId)
+  const totalNeighborCount = neighborIds.length
+  const sorted = neighborIds.sort((a, b) =>
+    (nodeMap[b]?.data?.blast_radius_count ?? 0) - (nodeMap[a]?.data?.blast_radius_count ?? 0)
+  )
+  const capped = sorted.slice(0, MAX_VISIBLE_NEIGHBORS)
+  const isCapped = totalNeighborCount > MAX_VISIBLE_NEIGHBORS
+  const finalVisible = new Set([focusedId, ...capped])
+
+  const nodes = [...finalVisible]
     .filter(id => nodeMap[id])
     .map(id => nodeMap[id])
 
   const edges = graphData.edges.filter(
-    e => visible.has(e.source) && visible.has(e.target)
+    e => finalVisible.has(e.source) && finalVisible.has(e.target)
   )
 
-  return { nodes, edges }
+  return { nodes, edges, totalNeighborCount, isCapped }
+}
+
+/**
+ * Three-column layout: dependents LEFT | focal CENTER | dependencies RIGHT.
+ * Focal node sits at (0,0). Each side column is centered vertically around y=0.
+ * Returns positioned nodes — header nodes are added by GraphCanvas.
+ */
+export function applyColumnLayout(rfNodes, focusedId) {
+  const focal    = rfNodes.find(n => n.data?.nodeRole === 'focal')
+  const deps     = rfNodes.filter(n => n.data?.nodeRole === 'dependency')
+  const usedBy   = rfNodes.filter(n => n.data?.nodeRole === 'dependent')
+  const extended = rfNodes.filter(n => n.data?.nodeRole === 'extended')
+
+  const positioned = []
+
+  if (focal) {
+    positioned.push({ ...focal, position: { x: -NODE_WIDTH / 2, y: -NODE_HEIGHT / 2 } })
+  }
+
+  const depSpan = Math.max(0, (deps.length - 1) * V_GAP)
+  deps.forEach((n, i) => {
+    positioned.push({
+      ...n,
+      position: {
+        x: COL_CENTER_X - NODE_WIDTH / 2,
+        y: -depSpan / 2 + i * V_GAP - NODE_HEIGHT / 2,
+      },
+    })
+  })
+
+  const usedBySpan = Math.max(0, (usedBy.length - 1) * V_GAP)
+  usedBy.forEach((n, i) => {
+    positioned.push({
+      ...n,
+      position: {
+        x: -COL_CENTER_X - NODE_WIDTH / 2,
+        y: -usedBySpan / 2 + i * V_GAP - NODE_HEIGHT / 2,
+      },
+    })
+  })
+
+  extended.forEach((n, i) => {
+    const cols  = Math.ceil(Math.sqrt(extended.length))
+    const col   = i % cols
+    const row   = Math.floor(i / cols)
+    positioned.push({
+      ...n,
+      position: {
+        x: (col - (cols - 1) / 2) * (NODE_WIDTH + 16),
+        y: 160 + row * V_GAP,
+      },
+    })
+  })
+
+  return positioned
 }
 
 /**

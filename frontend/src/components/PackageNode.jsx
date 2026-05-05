@@ -11,27 +11,29 @@ export default function PackageNode({ data }) {
     risk_score,
     blast_radius_count,
     trend_direction,
-    isFocused,
+    nodeRole = 'extended',
   } = data
 
-  const color     = RISK_COLORS[risk_label] ?? C.muted
-  const trendChar = trend_direction === 'RISING' ? '↑'
-                  : trend_direction === 'FALLING' ? '↓' : '→'
-  const trendColor = trend_direction === 'RISING'  ? RISK_COLORS.CRITICAL
-                   : trend_direction === 'FALLING' ? '#3FB950' : C.muted
+  const isFocal      = nodeRole === 'focal'
+  const riskColor    = RISK_COLORS[risk_label] ?? C.muted
+  const borderColor  = isFocal ? '#58A6FF' : riskColor
+  const trendChar    = trend_direction === 'RISING' ? '↑'
+                     : trend_direction === 'FALLING' ? '↓' : '→'
+  const trendColor   = trend_direction === 'RISING'  ? RISK_COLORS.CRITICAL
+                     : trend_direction === 'FALLING' ? '#3FB950' : C.muted
 
   return (
     <div
       title={`${package_name} — ${risk_score}/10 — ${(blast_radius_count ?? 0).toLocaleString()} dependents`}
       style={{
         width:        NODE_WIDTH,
-        background:   C.surface,
-        border:       `1.5px solid ${isFocused ? '#ffffff' : color + '99'}`,
+        background:   isFocal ? '#142033' : C.surface,
+        border:       `${isFocal ? 2 : 1.5}px solid ${borderColor}`,
         borderRadius: 8,
         padding:      '8px 10px',
         cursor:       'pointer',
-        boxShadow:    isFocused
-          ? `0 0 0 2px ${color}66, 0 4px 16px ${color}33`
+        boxShadow:    isFocal
+          ? '0 0 0 3px #58A6FF22, 0 4px 20px #58A6FF33'
           : '0 2px 8px rgba(0,0,0,0.4)',
         transition:   'box-shadow 0.15s, border-color 0.15s',
       }}
@@ -56,11 +58,11 @@ export default function PackageNode({ data }) {
         <span style={{
           fontSize:     9,
           fontWeight:   700,
-          color,
+          color:        riskColor,
           textTransform:'uppercase',
           letterSpacing:'0.04em',
-          background:   color + '22',
-          border:       `1px solid ${color}55`,
+          background:   riskColor + '22',
+          border:       `1px solid ${riskColor}55`,
           borderRadius: 3,
           padding:      '1px 5px',
           flexShrink:   0,

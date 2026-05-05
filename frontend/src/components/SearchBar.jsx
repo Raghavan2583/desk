@@ -8,16 +8,19 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
   const inputRef  = useRef(null)
   const listRef   = useRef(null)
 
-  const results = query.trim().length > 0
+  const trimmed = query.trim().toLowerCase()
+  const results = trimmed.length > 0
     ? packages
-        .filter(p => p.name.startsWith(query.trim().toLowerCase()))
+        .filter(p => p.name.startsWith(trimmed))
         .slice(0, 8)
     : []
+  const noResults = trimmed.length > 2 && results.length === 0
+  const isValidPkgName = /^[a-z0-9._-]+$/i.test(trimmed)
 
   useEffect(() => {
-    setOpen(results.length > 0)
+    setOpen(results.length > 0 || noResults)
     setCursor(-1)
-  }, [results.length])
+  }, [results.length, noResults])
 
   function select(pkg) {
     setQuery(pkg.name)
@@ -120,6 +123,29 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
               </span>
             </li>
           ))}
+
+          {noResults && (
+            <li style={{
+              padding:    '10px 14px',
+              cursor:     'default',
+              borderTop:  results.length > 0 ? `1px solid ${C.border}` : undefined,
+            }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                Not in DESK&apos;s top 1,000 PyPI packages.
+              </div>
+              {isValidPkgName && (
+                <a
+                  href={`https://pypi.org/project/${encodeURIComponent(trimmed)}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onMouseDown={e => e.stopPropagation()}
+                  style={{ fontSize: 12, color: C.accent, textDecoration: 'none' }}
+                >
+                  Search &ldquo;{trimmed}&rdquo; on PyPI →
+                </a>
+              )}
+            </li>
+          )}
         </ul>
       )}
     </div>
