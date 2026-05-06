@@ -137,7 +137,7 @@ def _build_row(package_name: str, vuln: dict, ingested_at: str) -> dict:
 
 def _query_batch(batch: list[str], session: requests.Session) -> list[dict]:
     body = {"queries": [{"package": {"name": p, "ecosystem": "PyPI"}} for p in batch]}
-    response = retry_with_backoff(session.post, OSV_BATCH_URL, json=body, timeout=30, max_retries=3)
+    response = retry_with_backoff(session.post, OSV_BATCH_URL, json=body, timeout=(5, 10), max_retries=3)
     response.raise_for_status()
     data = response.json()
     validate_response(data, OSV_BATCH_SCHEMA, source="osv")
