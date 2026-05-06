@@ -217,7 +217,7 @@ def _execute_batch(
         GITHUB_GRAPHQL_URL,
         json={"query": graphql_query},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=60,
+        timeout=(5, 10),
     )
     response.raise_for_status()
     _check_rate_limit(response.headers, batch_num=batch_num)
