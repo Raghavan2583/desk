@@ -5,6 +5,7 @@ WITH deduped AS (
         dependency_name,
         dependency_version_constraint,
         depth_level,
+        raw_payload,
         ROW_NUMBER() OVER (
             PARTITION BY package_name, dependency_name, depth_level
             ORDER BY ingested_at DESC
@@ -18,6 +19,10 @@ SELECT
     dependency_name,
     dependency_version_constraint,
     depth_level,
-    (depth_level = 1) AS is_direct
+    (depth_level = 1) AS is_direct,
+    REGEXP_CONTAINS(
+        COALESCE(JSON_VALUE(raw_payload, '$.spec'), ''),
+        r';\s*extra\s*=='
+    ) AS is_optional
 FROM deduped
 WHERE rn = 1

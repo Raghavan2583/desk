@@ -104,6 +104,8 @@ def _build_edges_and_counts(
             constraint = re.sub(r'^[A-Za-z0-9._-]+\s*(?:\[.*?\])?\s*', '', spec)
             constraint = constraint.split(';')[0].strip()
 
+            is_optional = bool(re.search(r';\s*extra\s*==', spec))
+
             edge_rows.append({
                 "ingested_at":                   ingested_at,
                 "package_name":                  pkg_name,
@@ -113,7 +115,8 @@ def _build_edges_and_counts(
                 "depth_level":                   1,
                 "raw_payload":                   json.dumps({"spec": spec}),
             })
-            dep_counts[dep_name] = dep_counts.get(dep_name, 0) + 1
+            if not is_optional:
+                dep_counts[dep_name] = dep_counts.get(dep_name, 0) + 1
 
     dependent_rows = [
         {

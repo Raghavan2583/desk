@@ -95,6 +95,7 @@ def _load_direct_edges(top_1000: set[str]) -> list[dict]:
             dependency_version_constraint AS version_constraint
         FROM `{_FACT_DEPS}`
         WHERE is_direct = TRUE
+          AND NOT COALESCE(is_optional, FALSE)
     """
     edges = [
         dict(row) for row in client.query(query).result()
@@ -185,6 +186,7 @@ def _load_dependency_graph(
         FROM `{_FACT_DEPS}` f
         LEFT JOIN `{_FACT_SCORES}` r ON f.package_name = r.package_name
         WHERE f.is_direct = TRUE
+          AND NOT COALESCE(f.is_optional, FALSE)
     """
     direct_deps: dict[str, list[str]]                  = {}
     dependents_raw: dict[str, list[tuple[str, int]]]   = {}

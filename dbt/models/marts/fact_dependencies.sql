@@ -4,5 +4,6 @@ SELECT
     dependency_version_constraint,
     depth_level,
     is_direct,
+    is_optional,
     CURRENT_TIMESTAMP() AS ingested_at
 FROM {{ ref('stg_deps_dependencies') }}
