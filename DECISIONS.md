@@ -114,6 +114,46 @@ DECISION: PackageNode renders as a dark rounded-rectangle card (160×64px) conta
 RATIONALE: Circle nodes with external labels were hard to read at scale. Card nodes expose key data directly without requiring hover, match React Flow's standard design language, and are easier to scan in a dense graph.
 LOCKED: 2026-05-05
 
+## D024 — Three-Column Graph Layout Replaces Dagre
+DECISION: Graph explore view uses manual three-column positioning: dependencies LEFT, focal CENTER, dependents RIGHT. All edges flow left→right. Dagre LR removed for this view.
+RATIONALE: Dagre LR does a full topological sort across all edges in graph.json — the focal node lands in a rank determined by graph topology, not user intent. Manual layout guarantees focal is always centered. Position communicates role without a legend. User testing confirmed dagre output was unreadable for non-technical users.
+LOCKED: 2026-05-05
+
+## D025 — Only Focal-Touching Edges Rendered
+DECISION: getVisibleSubgraph renders only edges where the focal node is source or target. Cross-edges between two neighbor nodes are excluded.
+RATIONALE: Showing all edges between visible nodes (previous behaviour) created spaghetti — if A and B are both neighbors of focal, and A→B exists in the graph, that edge appeared. It was irrelevant to the user's search and added visual noise. Pure star/hub topology from the focal is the correct model for one-package exploration.
+LOCKED: 2026-05-05
+
+## D026 — Optional Extras Filtering: Post-MVP
+DECISION: requires_dist lines containing `; extra ==` are not filtered in the current MVP. Post-MVP: pypi_ingest.py flags is_optional=TRUE, graph_export.py excludes them from edges.
+RATIONALE: The gap was discovered during real user testing (2026-05-05). Fixing it requires ingestion change + pipeline re-run + graph re-export. Not blocking for MVP demo if demo uses safe packages (requests, numpy, django, flask). Risk accepted.
+LOCKED: 2026-05-05
+
+## D027 — Vercel Deployment: Manual CLI, Not Git Integration
+DECISION: Vercel production deployment requires `vercel deploy --prod` from frontend/ directory. Git push to main does NOT trigger Vercel auto-deploy.
+RATIONALE: The frontend Vercel project (prj_lkBSMfh5CXDvE1idq81fLyz5lte4) was linked via CLI (frontend/.vercel/project.json), not GitHub integration. There is no GitHub→Vercel webhook configured. This is intentional for now — post-MVP, connect GitHub integration to automate.
+LOCKED: 2026-05-05
+
+## D028 — Optional Extras Filtering: Implemented (Supersedes D026)
+DECISION: requires_dist lines containing `; extra ==` are classified as is_optional=TRUE in stg_deps_dependencies via REGEXP_CONTAINS on raw_payload spec string. graph_export.py filters AND NOT COALESCE(is_optional, FALSE) on both edge queries. deps_dev_ingest skips optional deps when counting blast_radius.
+RATIONALE: 53% of all requires_dist edges in the top-1000 were optional extras — inflating blast_radius counts and showing false dependencies (e.g. hypothesis → numpy/pandas/django). Fix works on all existing data via raw_payload without schema migration or re-ingestion.
+LOCKED: 2026-05-06
+
+## D029 — OSV Ingest Resilience
+DECISION: BATCH_SIZE=50, timeout=(5,10) connect/read tuple, max_retries=3 on querybatch calls. OSV_BATCH_DELAY=1.0s between batches. continue-on-error: true on OSV step in workflow.
+RATIONALE: OSV.dev exhibits body-stall: sends HTTP headers then stalls on response body, defeating single-value timeouts. Tuple timeout enforces 10s maximum between any two bytes on the body. Pipeline must not be blocked by one flaky external API — continue-on-error ensures dbt/scoring/export run regardless.
+LOCKED: 2026-05-06
+
+## D030 — GitHub Ingest Timeout Tuple
+DECISION: timeout=(5,10) connect/read tuple on GitHub GraphQL POST in github_ingest.py.
+RATIONALE: Same body-stall pattern as OSV.dev — GraphQL endpoint sends headers then stalls under load. Single timeout=60 was holding the socket open indefinitely.
+LOCKED: 2026-05-06
+
+## D031 — Workflow Commit Step: Rebase Before Push
+DECISION: daily_refresh.yml commit step runs git pull --rebase origin main before git push to handle concurrent commits to main.
+RATIONALE: Code fixes pushed to main while pipeline runs caused the data commit to be rejected as non-fast-forward. Rebase ensures the graph data commit always lands on top of latest main cleanly.
+LOCKED: 2026-05-06
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.

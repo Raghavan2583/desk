@@ -106,3 +106,66 @@ Next task: Coach reviews ARCH.md → approves → Observer logs new decisions to
 ### Learnings for next D3O cycle
 - pypistats.org has no SLA — if down during ingest, monthly_downloads = NULL. download_component falls back to neutral 5.0. Acceptable.
 - BQ public dataset bootstrap scan is ~200-400 GB. Run once only, then monthly with date scope to stay inside 1 TB free quota.
+
+---
+
+## Session: DESK — 2026-05-06 — ~4 hrs
+
+### What happened
+Pipeline health check revealed AMBER: dim_maintainers has only 138 rows (target 600+) due to GraphQL rate limits hitting 100 errors/run. All four demo packages (requests, numpy, django, flask) have null maintainer cards — scores inflated by neutral 4.0 maintainer component + real CVEs. Demo strategy revised to use typing-extensions, pydantic, tqdm, grpcio (all have full maintainer data). Optional extras fix shipped: deps_dev_ingest, stg_deps_dependencies, fact_dependencies, graph_export — edge count dropped 5363→2543 (53% were optional extras). hypothesis now shows exceptiongroup/tzdata/sortedcontainers only. OSV body-stall root cause found and fixed: OSV.dev sends headers then stalls on body, defeating single-value timeout. Fixed with (5,10) connect/read tuple. Same fix applied to github_ingest. Pipeline workflow hardened: continue-on-error on OSV step, git pull --rebase before push. DEMO_SCRIPT.md written. Guardian final sign-off: APPROVED.
+
+### Decisions made
+- D028: Optional extras filtering implemented in dbt + graph_export (supersedes D026 post-MVP deferral)
+- D029: OSV ingest — BATCH_SIZE 50, timeout=(5,10), max_retries=3, continue-on-error in workflow
+- D030: GitHub ingest — timeout=(5,10) on GraphQL POST
+- D031: Workflow commit step uses git pull --rebase origin main before push to handle concurrent commits
+
+### What failed and how it was resolved
+- Pipeline hung on OSV step ×2 — single timeout=60 doesn't catch body stall (headers arrive, body stalls). Fixed with (5,10) tuple.
+- Pipeline hung on GitHub maintainers ×1 — same body stall pattern. Fixed with (5,10) tuple.
+- Commit step push rejected ×1 — concurrent code commits moved main ahead. Fixed with git pull --rebase before push.
+- Push of github_ingest fix rejected locally — same rebase pattern. Fixed with git stash + pull --rebase + stash pop.
+
+### Where we stopped
+Phase: Operate
+Active agent: Dhoni + Observer
+Pipeline: last successful run 2026-05-06 ~04:30 UTC. All steps green. graph.json updated.
+Guardian: APPROVED — DESK is demo-ready.
+Demo script: DEMO_SCRIPT.md in project root.
+
+### Learnings for next D3O cycle
+- requests timeout=(connect, read) tuple is mandatory for any API that may stall on the response body. Single value is insufficient.
+- OSV.dev and GitHub GraphQL both exhibit body-stall behaviour under load. Pattern applies to any future ingest scripts.
+- continue-on-error on ingestion steps prevents one flaky external API from blocking the entire pipeline. All ingest steps should have it.
+- 53% of requires_dist entries in the top-1000 are optional extras — much higher than expected. Blast radius counts were significantly inflated before the fix.
+- Demo packages must have populated maintainer data. requests/numpy/django/flask all have null maintainer cards due to GraphQL rate limit gap (138/900 repos indexed).
+- GraphQL rate limit root cause (100 errors/run, only 138 maintainer rows) is the top priority post-demo.
+
+---
+
+## Session: DESK — 2026-05-05 — ~4 hrs
+
+### What happened
+Real user testing with Coach + 2 friends exposed two root problems: (1) non-technical user found the graph overwhelming and unreadable — no legend, no direction cues, dagre layout created spaghetti; (2) technical user searched python-statemachine and procrastinate, found nothing, got zero explanation. Session was spent fixing both with a full graph UX overhaul and search feedback. Also discovered Vercel was deployed manually (not auto from git push), which caused confusion when changes weren't appearing live. Identified and documented the optional extras data gap — requires_dist includes optional extras which DESK treats as required deps, polluting the "Depends on" column for packages like hypothesis.
+
+### Decisions made
+- Three-column manual layout replaces dagre LR: deps LEFT, focal CENTER, usedBy RIGHT. Arrows all flow left→right (water flow). (D024)
+- Only edges touching the focal node are rendered — cross-edges between neighbors removed. (D025)
+- Optional extras filtering (requires_dist `; extra ==` lines) is post-MVP. Demo avoids packages with many extras. (D026)
+- Vercel deployment: must run `vercel deploy --prod` from frontend/ directory. Git push to main does NOT trigger Vercel. (D027)
+
+### What failed and how it was resolved
+- Background color tinting (role-based node colors) failed — nodes too small for subtle tints to be visible. Reverted to risk-label border colors; position now communicates role.
+- Dagre layout was not producing three-column structure — dagre does a full topological sort regardless of focal node. Replaced with manual column positioning.
+- Changes not appearing live for 40 minutes — Vercel project is linked to CLI deployment, not GitHub integration. Root cause found via .vercel/project.json.
+
+### Where we stopped
+Phase: Operate
+Active agent: Dhoni + Observer
+Next task: Step 1 — Pipeline health check. Step 2 — Fix optional extras in pypi_ingest.py + graph_export.py. Step 3 — Re-export graph. Step 4 — Guardian final sign-off. Step 5 — Demo prep.
+
+### Learnings for next D3O cycle
+- Optional extras from requires_dist must be filtered at ingestion. Lines containing `; extra ==` should be marked is_optional=TRUE and excluded from graph edges.
+- Packages where extras create circular relationships (hypothesis ↔ pytest): both a dep-of and used-by. Bidirectional edges need special handling post-MVP.
+- sortedcontainers (blast_radius=4) is cut from hypothesis graph by the 15-node cap while high-blast optional extras dominate. Real deps can be invisible. Cap sorting by blast_radius only works correctly after optional extras are filtered.
+- Demo package list for superiors: requests, numpy, django, flask, boto3. Avoid hypothesis, pytest, and any library with many optional extras.

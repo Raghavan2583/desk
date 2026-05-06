@@ -4,28 +4,31 @@
 
 ## Current State
 Phase        : Operate
-Status       : Active — pipeline running on schedule
-Last updated : 2026-05-05
+Status       : Active — demo-ready. Guardian approved 2026-05-06.
+Last updated : 2026-05-06
 
 ## Last Session
-Date    : 2026-05-04/05
-Agent   : Striker + Dhoni + Guardian + Operator + Observer
-Summary : Completed Increment 12, full Deploy phase. DESK is live at
-          https://frontend-sand-seven-57.vercel.app. Pipeline runs daily
-          02:07 UTC. 8 infrastructure bugs found and fixed during deploy.
-          B001/B002/B003 data quality bugs fixed. GitHub URL coverage 900/1000.
+Date    : 2026-05-06
+Agent   : Dhoni + Striker + Guardian + Observer
+Summary : Optional extras fix shipped (5363→2543 edges, 53% were extras). OSV and
+          GitHub ingest body-stall fixed with (5,10) timeout tuple. Pipeline workflow
+          hardened (continue-on-error, rebase before push). Guardian sign-off: APPROVED.
+          DEMO_SCRIPT.md written. DESK is demo-ready.
 
 ## Next Action
-Agent   : Observer (monitor next scheduled run at 02:07 UTC)
-Task    : After next run completes — check GitHub maintainer row count.
-          If count < 600, investigate GraphQL null returns per-repo.
-          Then Guardian final sign-off on live system → Operate phase confirmed.
-After   : Begin tracking pipeline health, free-tier headroom, and real-usage gaps.
-Blocked : Nothing. Scheduled run triggers automatically.
+Agent   : Dhoni + Striker
+Task    : Fix GraphQL rate limit gap (138/900 maintainer rows).
+          Root cause: GitHub GraphQL API returns "Resource limits exceeded" on
+          batches during peak hours — 100 errors/run. All demo packages (requests,
+          numpy, django, flask) have null maintainer cards.
+          Options: (1) reduce batch size in github_ingest, (2) add inter-batch sleep,
+          (3) spread across multiple pipeline runs, (4) fallback to REST API for
+          missing packages.
+After   : Re-run pipeline → verify 600+ maintainer rows → update demo package list.
+Blocked : Nothing.
 
 ## Open Questions
-- Why do psf/requests, numpy/numpy, django/django return null from GitHub GraphQL
-  despite being public repos with correct URLs? Investigate on next run with logs.
+- None.
 
 ## Token Budget
 GREEN

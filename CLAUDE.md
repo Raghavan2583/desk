@@ -36,14 +36,13 @@ Pipeline : daily_refresh.yml — 02:07 UTC daily
 Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-04/05 — Full Deploy phase complete. 8 infra bugs fixed during pipeline bringup.
-Data quality bugs B001/B002/B003 fixed. Card-node UI shipped. DESK live.
+2026-05-06 — Optional extras fix shipped (5363→2543 edges). Pipeline hardened against
+OSV + GitHub body-stalls. Guardian sign-off: APPROVED. DEMO_SCRIPT.md written.
 
 ## Next Action
-Observer: Monitor next scheduled pipeline run (02:07 UTC 2026-05-06).
-Check GitHub maintainer row count post-run. Target: 600+ unique packages.
-If still low, investigate GraphQL null returns for psf/requests, numpy/numpy, django/django.
-Then Guardian: final sign-off on live system with complete data.
+Fix GraphQL rate limit gap: 138/900 maintainer rows indexed. All demo packages (requests,
+numpy, django, flask) have null maintainer cards. Reduce github_ingest batch size and add
+inter-batch sleep to stay within GraphQL resource limits per batch.
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/
