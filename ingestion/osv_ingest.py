@@ -40,10 +40,11 @@ client = bigquery.Client(project=PROJECT_ID)
 _RAW_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_osv_cves"
 _QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
 
-BATCH_SIZE        = 100
+BATCH_SIZE        = 50
 OSV_BATCH_URL     = "https://api.osv.dev/v1/querybatch"
 OSV_VULN_BASE_URL = "https://api.osv.dev/v1/vulns"
 OSV_REQ_DELAY     = 0.2   # 5 req/s — safe rate for OSV's unauthenticated endpoint
+OSV_BATCH_DELAY   = 1.0   # pause between querybatch calls to avoid rate limits
 
 OSV_BATCH_SCHEMA = {
     "type": "object",
@@ -136,7 +137,7 @@ def _build_row(package_name: str, vuln: dict, ingested_at: str) -> dict:
 
 def _query_batch(batch: list[str], session: requests.Session) -> list[dict]:
     body = {"queries": [{"package": {"name": p, "ecosystem": "PyPI"}} for p in batch]}
-    response = retry_with_backoff(session.post, OSV_BATCH_URL, json=body, timeout=60)
+    response = retry_with_backoff(session.post, OSV_BATCH_URL, json=body, timeout=30, max_retries=3)
     response.raise_for_status()
     data = response.json()
     validate_response(data, OSV_BATCH_SCHEMA, source="osv")
@@ -218,6 +219,7 @@ def main() -> None:
                 for package_name in batch:
                     mark_error(client, _QUEUE_TABLE, package_name,
                                str(exc), "last_osv_ingest_at")
+            time.sleep(OSV_BATCH_DELAY)
 
         logger.info(
             "phase 1 complete — packages=%d no_cve=%d vuln_refs=%d",

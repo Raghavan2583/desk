@@ -52,6 +52,7 @@ jobs:
         run: python ingestion/github_ingest.py
 
       - name: Ingest — OSV CVEs
+        continue-on-error: true
         run: python ingestion/osv_ingest.py
 
       - name: Ingest — deps.dev dependency graph
