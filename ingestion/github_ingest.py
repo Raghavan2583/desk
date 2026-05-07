@@ -1,7 +1,7 @@
 """
 ingestion/github_ingest.py
 Fetches maintainer activity data from GitHub GraphQL API.
-Uses alias-based batching (50 repos per query) to minimise API calls.
+Uses alias-based batching (20 repos per query) to minimise API calls.
 Writes to raw_github_maintainers.
 
 Packages with no github_repo_url are skipped — no row written (ARCH.md Section 2).
@@ -39,7 +39,8 @@ _QUEUE_TABLE    = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
 _DIM_TABLE      = f"{PROJECT_ID}.{DATASET_PROD}.dim_packages"
 _RAW_PYPI_TABLE = f"{PROJECT_ID}.{DATASET_RAW}.raw_pypi_packages"
 
-BATCH_SIZE        = 50    # repos per GraphQL query
+BATCH_SIZE        = 20    # repos per GraphQL query — reduced to stay under GraphQL node limits
+INTER_BATCH_SLEEP = 2     # seconds between batches
 RATE_LIMIT_BUFFER = 100   # sleep when X-RateLimit-Remaining drops below this
 DAYS_HISTORY      = 90    # commit history window
 
@@ -226,7 +227,13 @@ def _execute_batch(
 
     if "errors" in payload:
         for err in payload["errors"]:
-            logger.warning("GraphQL partial error: %s", err.get("message"))
+            msg = err.get("message", "")
+            if "resource limits" in msg.lower():
+                raise RuntimeError(
+                    f"GitHub GraphQL resource limits exceeded on batch {batch_num} — "
+                    "reduce BATCH_SIZE or increase INTER_BATCH_SLEEP"
+                )
+            logger.warning("GraphQL partial error: %s", msg)
 
     data = payload.get("data") or {}
     rows: list[dict]     = []
@@ -298,6 +305,8 @@ def main() -> None:
                     "batch %d–%d done — %d rows",
                     start, start + len(batch) - 1, len(batch_rows),
                 )
+                if start + BATCH_SIZE < len(batch_items):
+                    time.sleep(INTER_BATCH_SLEEP)
             except Exception as exc:
                 logger.error("batch %d–%d failed: %s", start, start + len(batch) - 1, exc)
                 for package_name, _, _, _ in batch:
