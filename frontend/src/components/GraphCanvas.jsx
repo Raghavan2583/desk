@@ -158,33 +158,6 @@ export default function GraphCanvas({
         focusedPackage={focusedPackage}
       />
 
-      {/* Edge color legend — bottom left, pushed above zoom controls */}
-      <Panel position="bottom-left">
-        <div style={{
-          background:   C.surface + 'ee',
-          border:       `1px solid ${C.border}`,
-          borderRadius: 8,
-          padding:      '9px 12px',
-          fontSize:     11,
-          lineHeight:   1.9,
-          marginBottom: 100,
-        }}>
-          {[
-            { color: EDGE_COLOR.dep,    label: 'Depends on (top)'    },
-            { color: EDGE_COLOR.usedBy, label: 'Used by (bottom)'    },
-          ].map(({ color, label }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                display: 'inline-block',
-                width: 18, height: 2, borderRadius: 1,
-                background: color, flexShrink: 0,
-              }} />
-              <span style={{ color: C.muted }}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </Panel>
-
       {/* Neighbor cap notice — top center */}
       {isCapped && (
         <Panel position="top-center">
