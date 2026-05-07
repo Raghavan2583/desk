@@ -3,8 +3,8 @@ import { NODE_WIDTH, NODE_HEIGHT } from '../components/PackageNode'
 
 const MAX_VISIBLE_NEIGHBORS = 15
 
-export const COL_CENTER_X = 380   // horizontal distance from focal center to each side column center
-export const V_GAP        = 80    // vertical gap between nodes in a column
+export const ROW_CENTER_Y = 180   // vertical distance from focal center to each row
+export const H_GAP        = 190   // horizontal center-to-center gap between nodes in a row
 
 // nodeSize kept for any legacy callers — cards use fixed NODE_WIDTH/NODE_HEIGHT
 export function nodeSize() { return NODE_WIDTH }
@@ -53,8 +53,8 @@ export function getVisibleSubgraph(graphData, focusedId, expandedIds = new Set()
 }
 
 /**
- * Three-column layout: dependents LEFT | focal CENTER | dependencies RIGHT.
- * Focal node sits at (0,0). Each side column is centered vertically around y=0.
+ * Vertical layout: depends-on TOP | focal MIDDLE | used-by BOTTOM.
+ * Focal sits at (0,0). Top/bottom rows are spread horizontally, centered at x=0.
  * Returns positioned nodes — header nodes are added by GraphCanvas.
  */
 export function applyColumnLayout(rfNodes, focusedId) {
@@ -69,24 +69,26 @@ export function applyColumnLayout(rfNodes, focusedId) {
     positioned.push({ ...focal, position: { x: -NODE_WIDTH / 2, y: -NODE_HEIGHT / 2 } })
   }
 
-  const depSpan = Math.max(0, (deps.length - 1) * V_GAP)
+  // Dependencies go TOP (upstream — what the focal depends on)
+  const depSpan = Math.max(0, (deps.length - 1) * H_GAP)
   deps.forEach((n, i) => {
     positioned.push({
       ...n,
       position: {
-        x: COL_CENTER_X - NODE_WIDTH / 2,
-        y: -depSpan / 2 + i * V_GAP - NODE_HEIGHT / 2,
+        x: -depSpan / 2 + i * H_GAP - NODE_WIDTH / 2,
+        y: -ROW_CENTER_Y - NODE_HEIGHT / 2,
       },
     })
   })
 
-  const usedBySpan = Math.max(0, (usedBy.length - 1) * V_GAP)
+  // Dependents go BOTTOM (downstream — what uses the focal)
+  const usedBySpan = Math.max(0, (usedBy.length - 1) * H_GAP)
   usedBy.forEach((n, i) => {
     positioned.push({
       ...n,
       position: {
-        x: -COL_CENTER_X - NODE_WIDTH / 2,
-        y: -usedBySpan / 2 + i * V_GAP - NODE_HEIGHT / 2,
+        x: -usedBySpan / 2 + i * H_GAP - NODE_WIDTH / 2,
+        y: ROW_CENTER_Y - NODE_HEIGHT / 2,
       },
     })
   })
@@ -99,7 +101,7 @@ export function applyColumnLayout(rfNodes, focusedId) {
       ...n,
       position: {
         x: (col - (cols - 1) / 2) * (NODE_WIDTH + 16),
-        y: 160 + row * V_GAP,
+        y: ROW_CENTER_Y + NODE_HEIGHT + 40 + row * (NODE_HEIGHT + 20),
       },
     })
   })

@@ -12,6 +12,8 @@ export default function App() {
   const [focusedPackage,  setFocusedPackage]  = useState(null)
   const [expandedPackages,setExpandedPackages]= useState(new Set())
   const [loading,         setLoading]         = useState(false)
+  const [panelVisible,    setPanelVisible]    = useState(true)
+  const [history,         setHistory]         = useState([])
 
   // Cache graph.json — only fetched once
   const graphCache = useRef(null)
@@ -40,6 +42,7 @@ export default function App() {
 
   const handleSearch = useCallback(async (packageName) => {
     setLoading(true)
+    setHistory([])
     try {
       const [graph, pkg] = await Promise.all([loadGraph(), loadPackage(packageName)])
       setGraphData(graph)
@@ -58,15 +61,25 @@ export default function App() {
     setLoading(true)
     try {
       const pkg = await loadPackage(packageName)
+      setHistory(prev => [...prev, { name: focusedPackage, data: packageData }])
       setPackageData(pkg)
-      setExpandedPackages(prev => new Set([...prev, packageName]))
+      setExpandedPackages(new Set())
       setFocusedPackage(packageName)
     } catch (err) {
       console.error('Node click failed:', err)
     } finally {
       setLoading(false)
     }
-  }, [focusedPackage])
+  }, [focusedPackage, packageData])
+
+  const handleBack = useCallback(() => {
+    if (history.length === 0) return
+    const prev = history[history.length - 1]
+    setHistory(h => h.slice(0, -1))
+    setPackageData(prev.data)
+    setFocusedPackage(prev.name)
+    setExpandedPackages(new Set())
+  }, [history])
 
   const handleNavigate = useCallback((packageName) => {
     handleSearch(packageName)
@@ -82,7 +95,7 @@ export default function App() {
         <div style={{
           display:    'flex',
           alignItems: 'center',
-          gap:        16,
+          gap:        12,
           padding:    '12px 20px',
           borderBottom: `1px solid ${C.border}`,
           background: C.surface,
@@ -96,6 +109,23 @@ export default function App() {
           }}>
             DESK
           </span>
+          {history.length > 0 && (
+            <button
+              onClick={handleBack}
+              style={{
+                background:   'transparent',
+                border:       `1px solid ${C.border}`,
+                borderRadius: 6,
+                color:        C.muted,
+                cursor:       'pointer',
+                fontSize:     12,
+                padding:      '4px 10px',
+                whiteSpace:   'nowrap',
+              }}
+            >
+              ← Back
+            </button>
+          )}
           <SearchBar
             packages={indexData}
             onSearch={handleSearch}
@@ -141,8 +171,8 @@ export default function App() {
       {/* Explore mode — graph + right panel */}
       {isExploring && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Graph canvas — 70% */}
-          <div style={{ flex: '0 0 70%', position: 'relative' }}>
+          {/* Graph canvas — expands when panel hidden */}
+          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             <ReactFlowProvider>
               <GraphCanvas
                 graphData={graphData}
@@ -153,13 +183,37 @@ export default function App() {
             </ReactFlowProvider>
           </div>
 
-          {/* Right panel — 30% */}
-          <div style={{ flex: '0 0 30%', overflowY: 'auto', background: C.surface }}>
-            <RiskScoreCard
-              packageData={packageData}
-              onNavigate={handleNavigate}
-            />
-          </div>
+          {/* Panel toggle strip */}
+          <button
+            onClick={() => setPanelVisible(v => !v)}
+            title={panelVisible ? 'Hide panel' : 'Show panel'}
+            style={{
+              flexShrink:     0,
+              width:          18,
+              background:     C.surface,
+              border:         'none',
+              borderLeft:     `1px solid ${C.border}`,
+              borderRight:    `1px solid ${C.border}`,
+              color:          C.muted,
+              cursor:         'pointer',
+              fontSize:       10,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+            }}
+          >
+            {panelVisible ? '›' : '‹'}
+          </button>
+
+          {/* Right panel — 30%, hideable */}
+          {panelVisible && (
+            <div style={{ flex: '0 0 30%', overflowY: 'auto', background: C.surface, borderLeft: `1px solid ${C.border}` }}>
+              <RiskScoreCard
+                packageData={packageData}
+                onNavigate={handleNavigate}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

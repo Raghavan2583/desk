@@ -12,10 +12,10 @@ import 'reactflow/dist/style.css'
 
 import PackageNode from './PackageNode'
 import { NODE_WIDTH, NODE_HEIGHT } from './PackageNode'
-import { getVisibleSubgraph, applyColumnLayout, COL_CENTER_X, V_GAP } from '../utils/graph'
+import { getVisibleSubgraph, applyColumnLayout, ROW_CENTER_Y } from '../utils/graph'
 import { C } from '../utils/colors'
 
-const EDGE_COLOR = { out: '#FF8C00', in: '#3FB950' }
+const EDGE_COLOR = { dep: '#FF8C00', usedBy: '#3FB950' }
 
 function GroupHeaderNode({ data }) {
   return (
@@ -86,12 +86,15 @@ export default function GraphCanvas({
     }))
 
     const rfEdges = visEdges.map(e => {
-      const isOut  = e.source === focusedPackage
-      const color  = isOut ? EDGE_COLOR.out : EDGE_COLOR.in
+      // e.source===focal → focal depends on e.target → e.target is TOP row (dep)
+      // e.target===focal → e.source depends on focal → e.source is BOTTOM row (usedBy)
+      // Swap source/target so all arrows flow top → bottom
+      const isDepEdge = e.source === focusedPackage
+      const color     = isDepEdge ? EDGE_COLOR.dep : EDGE_COLOR.usedBy
       return {
         id:        e.id,
-        source:    e.source,
-        target:    e.target,
+        source:    e.target,   // left-column node (dep or focal)
+        target:    e.source,   // right-column node (focal or usedBy)
         type:      'smoothstep',
         style:     { stroke: color, strokeWidth: 2 },
         animated:  true,
@@ -107,20 +110,18 @@ export default function GraphCanvas({
     const headerNodes = []
 
     if (depsCount > 0) {
-      const span = Math.max(0, (depsCount - 1) * V_GAP)
       headerNodes.push({
         id: '__header_deps', type: 'groupHeader',
-        data: { label: 'Depends on →', color: EDGE_COLOR.out },
-        position: { x: COL_CENTER_X - NODE_WIDTH / 2, y: -span / 2 - 40 - NODE_HEIGHT / 2 },
+        data: { label: '↑ Depends on', color: EDGE_COLOR.dep },
+        position: { x: -NODE_WIDTH / 2, y: -ROW_CENTER_Y - NODE_HEIGHT / 2 - 40 },
         draggable: false, selectable: false, focusable: false,
       })
     }
     if (usedByCount > 0) {
-      const span = Math.max(0, (usedByCount - 1) * V_GAP)
       headerNodes.push({
         id: '__header_used_by', type: 'groupHeader',
-        data: { label: '← Used by', color: EDGE_COLOR.in },
-        position: { x: -COL_CENTER_X - NODE_WIDTH / 2, y: -span / 2 - 40 - NODE_HEIGHT / 2 },
+        data: { label: 'Used by ↓', color: EDGE_COLOR.usedBy },
+        position: { x: -NODE_WIDTH / 2, y: ROW_CENTER_Y - NODE_HEIGHT / 2 - 40 },
         draggable: false, selectable: false, focusable: false,
       })
     }
@@ -157,7 +158,7 @@ export default function GraphCanvas({
         focusedPackage={focusedPackage}
       />
 
-      {/* Edge color legend — bottom left */}
+      {/* Edge color legend — bottom left, pushed above zoom controls */}
       <Panel position="bottom-left">
         <div style={{
           background:   C.surface + 'ee',
@@ -166,11 +167,11 @@ export default function GraphCanvas({
           padding:      '9px 12px',
           fontSize:     11,
           lineHeight:   1.9,
-          marginBottom: 8,
+          marginBottom: 100,
         }}>
           {[
-            { color: EDGE_COLOR.in,  label: 'Used by others' },
-            { color: EDGE_COLOR.out, label: 'Depends on'     },
+            { color: EDGE_COLOR.dep,    label: 'Depends on (top)'    },
+            { color: EDGE_COLOR.usedBy, label: 'Used by (bottom)'    },
           ].map(({ color, label }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{
@@ -196,7 +197,7 @@ export default function GraphCanvas({
             color:        C.muted,
             marginTop:    8,
           }}>
-            Showing top 15 of {totalNeighborCount} neighbors by impact — click any node to explore further
+            Showing top 15 of {totalNeighborCount} connections — click any node to focus on it
           </div>
         </Panel>
       )}

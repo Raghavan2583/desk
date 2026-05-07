@@ -38,7 +38,7 @@ export default function PackageNode({ data }) {
         transition:   'box-shadow 0.15s, border-color 0.15s',
       }}
     >
-      <Handle type="target" position={Position.Left}  style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Top}    style={{ opacity: 0 }} />
 
       {/* Package name */}
       <div style={{
@@ -86,7 +86,7 @@ export default function PackageNode({ data }) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )
 }
