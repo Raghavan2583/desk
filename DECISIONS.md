@@ -154,6 +154,41 @@ DECISION: daily_refresh.yml commit step runs git pull --rebase origin main befor
 RATIONALE: Code fixes pushed to main while pipeline runs caused the data commit to be rejected as non-fast-forward. Rebase ensures the graph data commit always lands on top of latest main cleanly.
 LOCKED: 2026-05-06
 
+## D032 — GitHub GraphQL Batch Size Reduction
+DECISION: BATCH_SIZE reduced from 50 to 20. INTER_BATCH_SLEEP=2s added. "Resource limits exceeded" in GraphQL response body now raises RuntimeError (was logged as warning).
+RATIONALE: At 50 repos/query, GitHub's server-side node complexity limit triggered silently — HTTP 200 with errors field, no data written. 762/900 packages had null maintainer rows. At 20, all 888 eligible packages indexed.
+LOCKED: 2026-05-07
+
+## D033 — Vercel Auto-Deploy via Workflow Step (Supersedes D027)
+DECISION: daily_refresh.yml runs `npx vercel deploy --prod` as its final step using VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID secrets. [skip ci] removed from refresh commit message.
+RATIONALE: [skip ci] blocked Vercel deployments (Vercel treats it as a skip signal). GitHub integration was never configured — Vercel was never auto-deploying. Workflow step deploys only when pipeline produces real data, not on every code commit. More precise than GitHub integration.
+LOCKED: 2026-05-07
+
+## D034 — pypi_event_trigger Concurrency and Rebase
+DECISION: pypi_event_trigger.yml joins the desk-pipeline concurrency group (cancel-in-progress: false) and adds git pull --rebase before push.
+RATIONALE: Without a shared concurrency group, pypi_event_trigger raced daily_refresh on git push — both write to frontend/public/data/. The rebase fix (D031) was applied to daily_refresh but not pypi_event_trigger.
+LOCKED: 2026-05-07
+
+## D035 — Vertical Graph Layout (Supersedes D024)
+DECISION: Graph explore view uses vertical three-row positioning: dependencies TOP, focal MIDDLE, dependents BOTTOM. Arrows flow top→bottom. PackageNode handles moved to Top/Bottom.
+RATIONALE: Horizontal three-column layout placed depends-on and used-by side by side, which felt arbitrary. Vertical hierarchy communicates the dependency chain (upstream → package → downstream) in the natural reading direction. Boss confirmed the vertical layout gives a better "big picture" view.
+LOCKED: 2026-05-07
+
+## D036 — Home Page as Risk Dashboard
+DECISION: Home page replaced with a risk dashboard: blast radius leaderboard (top 10 by downstream impact), ecosystem health ring (SVG donut showing CRITICAL/HIGH/MEDIUM/LOW split), stats strip (packages tracked / critical count / daily refresh). graph.json pre-warmed on mount.
+RATIONALE: Empty search box gave no value before interaction. Dashboard communicates the tool's core insight immediately — before the user types anything. Leaderboard tiles are clickable, making the home page an entry point to the graph, not just a search gateway.
+LOCKED: 2026-05-07
+
+## D037 — DEpendency riSK Brand Identity
+DECISION: DE=#58A6FF (accent blue), SK=#FF8C00 (orange) with glow, applied to all DESK wordmarks across home page hero and top bar. Full name formatted as DEpendency riSK with DE/SK coloured.
+RATIONALE: Acronym is not obvious from "DESK" alone. Colour-coding the source letters (DE from DEpendency, SK from riSK) communicates the name's origin instantly. Consistent across surfaces for brand recognition.
+LOCKED: 2026-05-07
+
+## D038 — Orbital Hero Animation
+DECISION: Home page hero uses a pure CSS @keyframes orbital animation: 3 rings (blue r=80, orange r=134, green r=192), glowing nodes, pulsing ambient core glow. Decorative only — no interaction, no data binding.
+RATIONALE: Static text hero had no visual impact. Cosmic orbital animation matches DESK's network/graph metaphor — nodes orbiting a center mirrors the dependency graph concept. Pure CSS (no canvas, no library) keeps bundle size unchanged.
+LOCKED: 2026-05-07
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.
