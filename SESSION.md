@@ -4,31 +4,27 @@
 
 ## Current State
 Phase        : Operate
-Status       : Active — demo-ready. Guardian approved 2026-05-06.
-Last updated : 2026-05-06
+Status       : Active — fully automated, orbital hero + brand identity live.
+Last updated : 2026-05-07
 
 ## Last Session
-Date    : 2026-05-06
-Agent   : Dhoni + Striker + Guardian + Observer
-Summary : Optional extras fix shipped (5363→2543 edges, 53% were extras). OSV and
-          GitHub ingest body-stall fixed with (5,10) timeout tuple. Pipeline workflow
-          hardened (continue-on-error, rebase before push). Guardian sign-off: APPROVED.
-          DEMO_SCRIPT.md written. DESK is demo-ready.
+Date    : 2026-05-07 (evening)
+Agent   : Dhoni + Striker + Observer
+Summary : Vertical graph layout shipped. Home page rebuilt as risk dashboard
+          (leaderboard + health ring + stats). DEpendency riSK brand identity
+          locked (DE=blue, SK=orange). Orbital hero animation added. TL;DR
+          snapshot + CVE readability + substring search all shipped.
+          P2 (optional extras) confirmed already fixed — stale memory.
 
 ## Next Action
 Agent   : Dhoni + Striker
-Task    : Fix GraphQL rate limit gap (138/900 maintainer rows).
-          Root cause: GitHub GraphQL API returns "Resource limits exceeded" on
-          batches during peak hours — 100 errors/run. All demo packages (requests,
-          numpy, django, flask) have null maintainer cards.
-          Options: (1) reduce batch size in github_ingest, (2) add inter-batch sleep,
-          (3) spread across multiple pipeline runs, (4) fallback to REST API for
-          missing packages.
-After   : Re-run pipeline → verify 600+ maintainer rows → update demo package list.
-Blocked : Nothing.
+Task    : Await boss meeting feedback. On return:
+          - P1 home page engagement features (Risk Movers, leaderboard tabs)
+          - Any UI changes from boss feedback
+Blocked : Boss meeting pending.
 
 ## Open Questions
-- None.
+- None. Backlog is clean.
 
 ## Token Budget
 GREEN

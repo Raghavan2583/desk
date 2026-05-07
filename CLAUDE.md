@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-05-05
+# Phase: Operate | Updated: 2026-05-07
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -36,13 +36,14 @@ Pipeline : daily_refresh.yml — 02:07 UTC daily
 Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-06 — Optional extras fix shipped (5363→2543 edges). Pipeline hardened against
-OSV + GitHub body-stalls. Guardian sign-off: APPROVED. DEMO_SCRIPT.md written.
+2026-05-07 (evening) — Vertical graph layout shipped. Home page rebuilt as risk dashboard
+(leaderboard + health ring + stats). DEpendency riSK brand identity locked (DE=blue,
+SK=orange). Orbital hero animation added. TL;DR snapshot + CVE readability + substring
+search shipped. Optional extras gap confirmed already fixed. Backlog clean.
 
 ## Next Action
-Fix GraphQL rate limit gap: 138/900 maintainer rows indexed. All demo packages (requests,
-numpy, django, flask) have null maintainer cards. Reduce github_ingest batch size and add
-inter-batch sleep to stay within GraphQL resource limits per batch.
+Await boss meeting feedback (Dhoni):
+  On return — P1 home page engagement (Risk Movers, leaderboard tabs) + boss feedback.
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/

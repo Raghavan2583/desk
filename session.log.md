@@ -3,6 +3,35 @@
 
 ---
 
+## Session: DESK — 2026-05-07 (evening) — ~4 hrs
+
+### What happened
+Full frontend overhaul driven by boss meeting feedback. Graph layout changed from three-column horizontal to vertical hierarchy (depends-on TOP → focal MIDDLE → used-by BOTTOM) with arrows flowing top→bottom. PackageNode handles moved Left/Right → Top/Bottom accordingly. Panel toggle and back button shipped (were uncommitted since last session). Legend removed — headers on graph nodes make it redundant. Home page rebuilt as a risk dashboard: blast radius leaderboard (top 10 by downstream impact, clickable tiles), ecosystem health ring (SVG donut with CRITICAL/HIGH/MEDIUM/LOW distribution), stats strip (packages tracked / critical count / daily refresh). DESK logo in top bar now navigates home. TL;DR health snapshot added to RiskScoreCard (one-liner: downstream · deps · CVEs · activity · last commit age). CVE rows redesigned: plain date (month year), link to GitHub Advisory / OSV, raw ID de-emphasised. CVE sort changed to descending (newest first). Search upgraded from prefix-only to substring with prefix results ranked first. DEpendency riSK brand identity locked: DE=#58A6FF, SK=#FF8C00, everywhere including the top bar wordmark. Cosmic orbital animation added to hero: 3 rings (blue/orange/green), glowing nodes, pulsing ambient core — pure CSS. All changes deployed to production. P2 (optional extras gap) confirmed already fixed — project memory was stale, live data verified clean.
+
+### Decisions made
+- D035: Vertical graph layout — depends-on TOP, focal MIDDLE, used-by BOTTOM (supersedes D024 three-column)
+- D036: Home page as risk dashboard — leaderboard + health ring + stats bar, graph.json pre-warmed on mount
+- D037: DEpendency riSK brand identity — DE=#58A6FF, SK=#FF8C00, consistent across all surfaces
+- D038: Orbital hero animation — pure CSS @keyframes, 3 rings, decorative only, no interaction
+
+### What failed and how it was resolved
+- Commit blocked on push: remote had a newer data refresh commit. Fixed with git stash + pull --rebase + stash pop + push.
+- Vercel CLI not auto-deploying on push (expected — wired to pipeline only). Resolved by running vercel deploy --prod manually from frontend/ each time.
+
+### Where we stopped
+Phase: Operate
+Pipeline: fully automated, running daily at 02:07 UTC.
+Frontend: https://frontend-sand-seven-57.vercel.app — orbital hero + brand identity live.
+Boss meeting pending — Coach will present to boss and return with feedback.
+
+### Learnings for next D3O cycle
+- Vertical top-to-bottom graph layout communicates dependency chain more intuitively than horizontal columns for non-technical users.
+- Pre-warming graph.json on mount eliminates all latency on the home page leaderboard — no perceived loading.
+- CVE readability (date + link vs raw ID) significantly reduces cognitive load for non-professionals without losing data for professionals.
+- Brand identity (colored acronym) is a fast way to communicate what the tool does before the user reads any copy.
+
+---
+
 ## Session: DESK — 2026-05-04/05 — ~10 hours
 
 ### What happened
@@ -106,6 +135,36 @@ Next task: Coach reviews ARCH.md → approves → Observer logs new decisions to
 ### Learnings for next D3O cycle
 - pypistats.org has no SLA — if down during ingest, monthly_downloads = NULL. download_component falls back to neutral 5.0. Acceptable.
 - BQ public dataset bootstrap scan is ~200-400 GB. Run once only, then monthly with date scope to stay inside 1 TB free quota.
+
+---
+
+## Session: DESK — 2026-05-07 — ~6 hrs
+
+### What happened
+GraphQL rate limit gap fixed: BATCH_SIZE 50→20, INTER_BATCH_SLEEP=2s, "Resource limits exceeded" now raises instead of warning silently. Maintainer rows went from 138 to 888 (out of 900 eligible). pypi_event_trigger race condition fixed: shared desk-pipeline concurrency group + git pull --rebase before push. Root cause of stale Vercel data found: [skip ci] in refresh commits was blocking Vercel deployments; daily_refresh workflows use schedule/dispatch only so [skip ci] never did anything for GitHub Actions — it only ever blocked Vercel. Fix: removed [skip ci], added vercel deploy --prod step with VERCEL_TOKEN secret. Full end-to-end verified: pipeline ran → 888 rows → data committed → Vercel deployed automatically → maintainer cards live. CI/CD guardrails documented in project GUARDRAILS.md, global ~/.claude/rules/cicd.md, and dhoni.md. Personal learnings written to LEARNINGS.md.
+
+### Decisions made
+- D032: GitHub GraphQL BATCH_SIZE 50→20 + 2s inter-batch sleep + raise on resource limits
+- D033: Vercel auto-deploy via workflow step — supersedes D027 (manual CLI)
+- D034: pypi_event_trigger joins desk-pipeline concurrency group + rebase before push
+
+### What failed and how it was resolved
+- Maintainer cards showing dashes: initially suspected browser cache (wrong). Root cause: Vercel never redeployed after pipeline runs because [skip ci] blocked all Vercel deployments since launch. Fixed by removing [skip ci] + adding deploy step.
+- GitHub GraphQL "Resource limits exceeded": was silently swallowed as a warning. 762 packages had null maintainer data with no alert. Fixed by reducing BATCH_SIZE and raising on batch-level errors.
+- Pipeline loop yesterday: cancel-in-progress: false + multiple manual triggers + pypi_event_trigger racing daily_refresh created sequential failures. Fixed with shared concurrency group.
+
+### Where we stopped
+Phase: Operate
+All pipeline automation complete and verified. DESK fully automated end-to-end.
+Pending: frontend/src/App.jsx + GraphCanvas.jsx + graph.js — uncommitted UI changes
+  including zoom button fix (marginBottom 8→100), panel toggle, back button.
+  Discuss column layout direction with Coach before committing GraphCanvas + graph.js.
+
+### Learnings for next D3O cycle
+- [skip ci] blocks Vercel. Only use it when skipping Vercel is explicitly intended.
+- Diagnose stale data by curling the live URL — not by asking for a hard refresh.
+- GraphQL HTTP 200 can contain batch-level failures. Always inspect errors field. Raise, never warn.
+- Any two workflows writing to the same files need a shared concurrency group.
 
 ---
 
