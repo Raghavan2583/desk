@@ -3,7 +3,7 @@ import { ReactFlowProvider } from 'reactflow'
 import SearchBar    from './components/SearchBar'
 import GraphCanvas  from './components/GraphCanvas'
 import RiskScoreCard from './components/RiskScoreCard'
-import HomeScreen   from './components/HomeScreen'
+import HomeScreen, { Wordmark } from './components/HomeScreen'
 import { C } from './utils/colors'
 
 export default function App() {
@@ -103,18 +103,12 @@ export default function App() {
           background: C.surface,
           flexShrink: 0,
         }}>
-          <span
+          <div
             onClick={() => { setFocusedPackage(null); setHistory([]) }}
-            style={{
-              fontWeight:   700,
-              fontSize:     15,
-              color:        C.accent,
-              letterSpacing:'0.04em',
-              cursor:       'pointer',
-            }}
+            style={{ cursor: 'pointer', lineHeight: 1 }}
           >
-            DESK
-          </span>
+            <Wordmark size={18} />
+          </div>
           {history.length > 0 && (
             <button
               onClick={handleBack}
