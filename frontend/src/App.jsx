@@ -3,6 +3,7 @@ import { ReactFlowProvider } from 'reactflow'
 import SearchBar    from './components/SearchBar'
 import GraphCanvas  from './components/GraphCanvas'
 import RiskScoreCard from './components/RiskScoreCard'
+import HomeScreen   from './components/HomeScreen'
 import { C } from './utils/colors'
 
 export default function App() {
@@ -18,12 +19,13 @@ export default function App() {
   // Cache graph.json — only fetched once
   const graphCache = useRef(null)
 
-  // Load index.json on mount
+  // Load index.json and pre-warm graph.json on mount
   useEffect(() => {
     fetch('/data/index.json')
       .then(r => r.json())
       .then(d => setIndexData(d.packages ?? []))
       .catch(err => console.error('index.json load failed:', err))
+    loadGraph().then(g => setGraphData(g)).catch(() => {})
   }, [])
 
   async function loadGraph() {
@@ -101,12 +103,16 @@ export default function App() {
           background: C.surface,
           flexShrink: 0,
         }}>
-          <span style={{
-            fontWeight:   700,
-            fontSize:     15,
-            color:        C.accent,
-            letterSpacing:'0.04em',
-          }}>
+          <span
+            onClick={() => { setFocusedPackage(null); setHistory([]) }}
+            style={{
+              fontWeight:   700,
+              fontSize:     15,
+              color:        C.accent,
+              letterSpacing:'0.04em',
+              cursor:       'pointer',
+            }}
+          >
             DESK
           </span>
           {history.length > 0 && (
@@ -137,35 +143,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Empty state — centered search */}
+      {/* Home screen */}
       {!isExploring && (
-        <div style={{
-          flex:           1,
-          display:        'flex',
-          flexDirection:  'column',
-          alignItems:     'center',
-          justifyContent: 'center',
-          gap:            24,
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              fontSize:     28,
-              fontWeight:   700,
-              color:        C.text,
-              letterSpacing:'0.04em',
-              marginBottom: 8,
-            }}>
-              DESK
-            </div>
-            <div style={{ fontSize: 14, color: C.muted }}>
-              Dependency risk across the PyPI ecosystem
-            </div>
-          </div>
-          <SearchBar packages={indexData} onSearch={handleSearch} />
-          {loading && (
-            <span style={{ fontSize: 13, color: C.muted }}>Loading…</span>
-          )}
-        </div>
+        <HomeScreen
+          indexData={indexData}
+          graphData={graphData}
+          onSearch={handleSearch}
+          loading={loading}
+        />
       )}
 
       {/* Explore mode — graph + right panel */}
