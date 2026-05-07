@@ -38,6 +38,20 @@ NEVER add a feature not in ROADMAP.md without Dhoni escalating to Coach first.
 NEVER expand beyond 1,000 packages in MVP without Coach approval.
 NEVER change the risk score formula without creating a new versioned entry in DECISIONS.md.
 
+## CI/CD Guardrails
+NEVER use [skip ci] in any DESK commit message — it blocks Vercel deployments.
+  DESK workflows use schedule/workflow_dispatch only, so [skip ci] does nothing
+  for GitHub Actions here but silently kills the Vercel auto-deploy every time.
+NEVER add a workflow that writes to the repository without joining the
+  desk-pipeline concurrency group — parallel writes cause git push conflicts.
+  Exception: read-only monitoring workflows (schema_monitor.yml) are exempt.
+NEVER add a git push step without git pull --rebase origin main before it.
+NEVER treat a GraphQL HTTP 200 as success without inspecting the errors field.
+  Partial field errors → log as warning. Batch-level failures (resource limits,
+  rate limits) → raise immediately. Silent warnings create invisible data gaps.
+NEVER increase BATCH_SIZE above 20 without running a test batch first and
+  confirming no "Resource limits exceeded" in the response.
+
 ## Quality Guardrails
 NEVER ship risk scores without validating output against at least 5 known packages:
   Required test packages: requests, numpy, pandas, log4j-equivalent in Python, a deprecated package.
