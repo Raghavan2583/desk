@@ -11,7 +11,12 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
   const trimmed = query.trim().toLowerCase()
   const results = trimmed.length > 0
     ? packages
-        .filter(p => p.name.startsWith(trimmed))
+        .filter(p => p.name.toLowerCase().includes(trimmed))
+        .sort((a, b) => {
+          const as = a.name.toLowerCase().startsWith(trimmed)
+          const bs = b.name.toLowerCase().startsWith(trimmed)
+          return (bs ? 1 : 0) - (as ? 1 : 0)
+        })
         .slice(0, 8)
     : []
   const noResults = trimmed.length > 2 && results.length === 0
