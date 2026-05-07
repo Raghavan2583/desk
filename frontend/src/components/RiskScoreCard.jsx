@@ -237,7 +237,7 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
                         marginBottom: 8 }}>
             {cves.length} {cves.length === 1 ? 'Vulnerability' : 'Vulnerabilities'}
           </div>
-          {[...cves].sort((a, b) => new Date(a.published_at) - new Date(b.published_at)).map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
+          {[...cves].sort((a, b) => new Date(b.published_at) - new Date(a.published_at)).map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
         </div>
       )}
 
