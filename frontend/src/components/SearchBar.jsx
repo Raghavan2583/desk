@@ -74,15 +74,15 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
           width:        '100%',
           padding:      compact ? '8px 14px' : '14px 20px',
           fontSize:     compact ? 14 : 16,
-          background:   C.surface,
-          border:       `1px solid ${C.border}`,
+          background:   '#161B22',
+          border:       '1px solid rgba(255,255,255,0.1)',
           borderRadius: 8,
           color:        C.text,
           outline:      'none',
           fontFamily:   'inherit',
         }}
-        onFocusCapture={e => { e.target.style.borderColor = C.accent }}
-        onBlurCapture={e => { e.target.style.borderColor = C.border }}
+        onFocusCapture={e => { e.target.style.borderColor = 'rgba(0,212,255,0.6)'; e.target.style.boxShadow = '0 0 0 3px rgba(0,212,255,0.08)' }}
+        onBlurCapture={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none' }}
       />
 
       {open && (
@@ -94,8 +94,8 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
             left:       0,
             right:      0,
             marginTop:  4,
-            background: C.surface,
-            border:     `1px solid ${C.border}`,
+            background: '#161B22',
+            border:     '1px solid rgba(255,255,255,0.1)',
             borderRadius: 8,
             listStyle:  'none',
             zIndex:     100,
@@ -113,7 +113,7 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
                 justifyContent: 'space-between',
                 padding:    '10px 14px',
                 cursor:     'pointer',
-                background: i === cursor ? C.border : 'transparent',
+                background: i === cursor ? 'rgba(0,212,255,0.1)' : 'transparent',
               }}
             >
               <span style={{ color: C.text, fontWeight: 500 }}>{pkg.name}</span>
