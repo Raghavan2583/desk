@@ -19,7 +19,7 @@ export const ACTIVITY_COLORS = {
 }
 
 export const C = {
-  bg:      '#1A1614',
+  bg:      '#0D1117',
   surface: '#242020',
   border:  '#3D3735',
   text:    '#F2EDE8',

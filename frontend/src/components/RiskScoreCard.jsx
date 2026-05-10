@@ -53,22 +53,26 @@ function CveRow({ cve }) {
   )
 }
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, color }) {
   return (
-    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>
-      {children}
+    <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10 }}>
+      {color && <span style={{ width:8, height:8, borderRadius:'50%', background:color, display:'inline-block', boxShadow:`0 0 6px 2px ${color}88`, flexShrink:0 }}/>}
+      <span style={{ fontSize:10, fontWeight:700, color: color ?? C.muted, textTransform:'uppercase', letterSpacing:'0.1em', textShadow: color ? `0 0 10px ${color}66` : 'none' }}>
+        {children}
+      </span>
     </div>
   )
 }
 
-function ChipList({ packages, onNavigate }) {
+function ChipList({ packages, onNavigate, color }) {
+  const c = color ?? C.accent
   return (
     <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
       {packages.map(name => (
         <button key={name} onClick={() => onNavigate(name)}
-          style={{ fontSize:11, color:C.accent, background:`${C.accent}14`, border:`1px solid ${C.accent}33`, borderRadius:4, padding:'3px 9px', cursor:'pointer', fontFamily:'inherit', transition:'background 0.12s,border-color 0.12s' }}
-          onMouseEnter={e=>{ e.currentTarget.style.background=`${C.accent}28`; e.currentTarget.style.borderColor=`${C.accent}66` }}
-          onMouseLeave={e=>{ e.currentTarget.style.background=`${C.accent}14`; e.currentTarget.style.borderColor=`${C.accent}33` }}
+          style={{ fontSize:11, color:c, background:`${c}18`, border:`1px solid ${c}44`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit', fontWeight:600, transition:'background 0.12s,border-color 0.12s,box-shadow 0.12s' }}
+          onMouseEnter={e=>{ e.currentTarget.style.background=`${c}30`; e.currentTarget.style.borderColor=`${c}88`; e.currentTarget.style.boxShadow=`0 0 8px 1px ${c}44` }}
+          onMouseLeave={e=>{ e.currentTarget.style.background=`${c}18`; e.currentTarget.style.borderColor=`${c}44`; e.currentTarget.style.boxShadow='none' }}
         >
           {name}
         </button>
@@ -154,31 +158,31 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
         </div>
       </div>
 
-      {/* ── Row 3: CVEs ── */}
+      {/* ── Row 3: Dependencies side by side — above CVEs ── */}
+      {(direct_dependencies.length > 0 || direct_dependents.length > 0) && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+          {direct_dependencies.length > 0 && (
+            <div>
+              <SectionLabel color="#00D4FF">Depends on</SectionLabel>
+              <ChipList packages={direct_dependencies} onNavigate={onNavigate} color="#00D4FF" />
+            </div>
+          )}
+          {direct_dependents.length > 0 && (
+            <div>
+              <SectionLabel color="#FF2D9A">Used by</SectionLabel>
+              <ChipList packages={direct_dependents} onNavigate={onNavigate} color="#FF2D9A" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Row 4: CVEs ── */}
       {sortedCves.length > 0 && (
         <div>
           <SectionLabel>{sortedCves.length} {sortedCves.length===1?'Vulnerability':'Vulnerabilities'}</SectionLabel>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
             {sortedCves.map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
           </div>
-        </div>
-      )}
-
-      {/* ── Row 4: Dependencies side by side ── */}
-      {(direct_dependencies.length > 0 || direct_dependents.length > 0) && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
-          {direct_dependencies.length > 0 && (
-            <div>
-              <SectionLabel>Depends on</SectionLabel>
-              <ChipList packages={direct_dependencies} onNavigate={onNavigate} />
-            </div>
-          )}
-          {direct_dependents.length > 0 && (
-            <div>
-              <SectionLabel>Used by</SectionLabel>
-              <ChipList packages={direct_dependents} onNavigate={onNavigate} />
-            </div>
-          )}
         </div>
       )}
     </div>

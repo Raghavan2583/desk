@@ -319,7 +319,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
       <div ref={leaderboardRef} style={{ position:'relative', zIndex:2, background:C.bg, padding:'72px 72px 88px', transform:leaderboardVisible?'translateY(0)':'translateY(60px)', opacity:leaderboardVisible?1:0, transition:'transform 0.85s cubic-bezier(0.16,1,0.3,1),opacity 0.7s ease' }}>
 
         {/* Floating window */}
-        <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', background:'#13131E', borderRadius:14, border:'1px solid rgba(255,255,255,0.09)', boxShadow:'0 36px 100px rgba(0,0,0,0.88), 0 0 0 3px #1A1614, 0 0 0 5px rgba(110,80,220,0.70), 0 0 20px 6px rgba(100,70,210,0.55), 0 0 50px 12px rgba(90,60,200,0.30), 0 0 100px 22px rgba(80,50,190,0.15), 0 0 200px 40px rgba(70,45,180,0.07)', overflow:'hidden' }}>
+        <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', background:'#13131E', borderRadius:14, border:'1px solid rgba(255,255,255,0.09)', boxShadow:'0 36px 100px rgba(0,0,0,0.88), 0 0 0 3px #0D1117, 0 0 0 5px rgba(110,80,220,0.70), 0 0 20px 6px rgba(100,70,210,0.55), 0 0 50px 12px rgba(90,60,200,0.30), 0 0 100px 22px rgba(80,50,190,0.15), 0 0 200px 40px rgba(70,45,180,0.07)', overflow:'hidden' }}>
 
           {/* Title bar — macOS style */}
           <div style={{ display:'flex', alignItems:'center', gap:7, padding:'12px 18px', background:'#1A1A2C', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
