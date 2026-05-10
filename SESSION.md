@@ -3,34 +3,29 @@
 # Rule: NEVER exceed 30 lines.
 
 ## Current State
-Phase        : Operate — [PAUSED]
-Status       : UI session mid-flight. Home page visual redesign in progress.
-Last updated : 2026-05-08
+Phase        : Operate — CLEAN CLOSE
+Status       : Both pages live on production. No open work.
+Last updated : 2026-05-10
 
 ## Last Session
-Date    : 2026-05-08 (evening)
+Date    : 2026-05-10
 Agent   : Dhoni + Striker + Observer
-Summary : Full home page UI redesign session. Boss gave green light. New palette
-          (warm charcoal base), DE=green/SK=red brand colors, floating stat cards
-          (GitHub-duck style), leaderboard panel peek at bottom. Core layout
-          alignment bug identified and fixed (asymmetric padding shifted content
-          left). Dev server WSL2 polling fix applied. Session paused mid-review.
+Summary : Full frontend overhaul. Home: centered hero, navy bg, macOS leaderboard
+          window, scroll zoom-out. Graph: scroll reveal, navy canvas, cyan/magenta
+          edges, focal pulse, 3-column risk panel, compact layout. All deployed.
 
 ## Last Completed Action
-Striker: Fixed hero layout alignment — content zone now proper flex row with
-         justifyContent:center on content column. CLI panel in right column.
-         Floating cards at fixed bottom:65px. Build clean. Awaiting Coach review.
+Operator: Deployed via `npx vercel --prod` from frontend/. Production confirmed live.
+          All commits pushed to main. Dev server still running (bjk9ze778) — kill if needed.
 
 ## Next Action — on resume
-Agent   : Dhoni + Striker
-Task    : Coach hard-refreshes http://localhost:5173 and confirms alignment fix.
-          If approved → Observer writes session handoff → /crew-end.
-          If further tweaks needed → Striker adjusts per Coach feedback.
-Note    : Dev server must be restarted on resume (WSL2 polling mode):
-          cd frontend && CHOKIDAR_USEPOLLING=true npx vite --port 5173
+Agent   : Dhoni
+Task    : Load boss feedback. Decide P1: Risk Movers widget OR leaderboard tabs.
+          Run /crew-start to begin next session.
+Note    : Deploy command: cd frontend && npx vercel --prod
 
 ## Open Questions
-- None pending. Awaiting visual confirmation from Coach.
+- None. Awaiting boss meeting feedback.
 
 ## Token Budget
 GREEN

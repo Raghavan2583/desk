@@ -189,6 +189,26 @@ DECISION: Home page hero uses a pure CSS @keyframes orbital animation: 3 rings (
 RATIONALE: Static text hero had no visual impact. Cosmic orbital animation matches DESK's network/graph metaphor — nodes orbiting a center mirrors the dependency graph concept. Pure CSS (no canvas, no library) keeps bundle size unchanged.
 LOCKED: 2026-05-07
 
+## D039 — Brand Identity Updated (Supersedes D037)
+DECISION: DE=#3FB950 (green), SK=#E63946 (red). Applied to wordmark, hero, all surfaces.
+RATIONALE: Previous DE=blue/SK=orange lacked contrast against navy background. Green/red matches ecosystem health semantics (safe/risk) and reads clearly on #0D1117.
+LOCKED: 2026-05-10
+
+## D040 — Unified Navy Theme
+DECISION: C.bg=#0D1117 (GitHub standard dark navy) across all pages — home, explore, top bar, leaderboard gutters.
+RATIONALE: Warm charcoal #1A1614 clashed with the graph canvas. Navy is the industry standard (GitHub, Linear, Vercel dashboards) and eliminates the seam between home and explore views.
+LOCKED: 2026-05-10
+
+## D041 — Graph Explore Scroll Reveal
+DECISION: Explore mode uses sticky graph (zooms out + fades on scroll) with risk panel rising from below — same mechanic as home leaderboard. zoomOnScroll=false on ReactFlow lets mouse wheel scroll the page.
+RATIONALE: Side-by-side panel wasted screen space and hid the graph context. Scroll reveal gives full-screen graph first, then full-width risk analysis — better information hierarchy.
+LOCKED: 2026-05-10
+
+## D042 — ReactFlow Background Fix
+DECISION: index.css `.react-flow__background` set to `background: transparent`. ReactFlow background colour controlled exclusively via `style={{ background: '...' }}` prop on the ReactFlow component.
+RATIONALE: The CSS class override silently painted the canvas regardless of any inline style set in React. This caused every background change attempt to fail. Transparent is the correct default — the React prop controls the colour.
+LOCKED: 2026-05-10
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.

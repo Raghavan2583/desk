@@ -36,14 +36,16 @@ Pipeline : daily_refresh.yml — 02:07 UTC daily
 Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-07 (evening) — Vertical graph layout shipped. Home page rebuilt as risk dashboard
-(leaderboard + health ring + stats). DEpendency riSK brand identity locked (DE=blue,
-SK=orange). Orbital hero animation added. TL;DR snapshot + CVE readability + substring
-search shipped. Optional extras gap confirmed already fixed. Backlog clean.
+2026-05-10 — Full frontend overhaul. Home page: centered hero, navy bg, macOS leaderboard
+window with purple glow ring, scroll zoom-out. Graph page: scroll reveal mechanic, navy
+#0D1117 canvas, cyan/magenta glowing edges, focal node pulse, 3-column risk panel, compact
+layout. Brand: DE=green, SK=red. Both pages live on production.
 
 ## Next Action
-Await boss meeting feedback (Dhoni):
-  On return — P1 home page engagement (Risk Movers, leaderboard tabs) + boss feedback.
+Await boss meeting feedback. P1 candidates:
+  - Risk Movers widget (packages trending up in risk)
+  - Leaderboard tabs (by blast radius / by risk score / by CVE count)
+  - Any feedback from boss demo session
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/

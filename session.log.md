@@ -3,6 +3,32 @@
 
 ---
 
+## Session: DESK — 2026-05-10 — ~8 hrs
+
+### What happened
+Full frontend overhaul across two pages. Home page: centered hero (removed CLI panel and aurora blobs), unified navy `#0D1117` background, macOS floating leaderboard window with purple glowing border ring, scroll zoom-out mechanic (hero zooms out, leaderboard rises). Graph page: scroll reveal (sticky graph zooms out, risk panel slides up from below), navy graph canvas with electric cyan/magenta glowing edges, focal node breathing pulse, 3-column risk panel header, compact CVE grid, dependency chips moved above CVEs with cyan/magenta color coding matching graph edges. Brand colors updated: DE=#3FB950 (green), SK=#E63946 (red). Search box updated to navy theme. All changes deployed to production via `npx vercel --prod` from frontend/. Root cause for repeated bg failures: `.react-flow__background { background: var(--bg) }` in index.css was overriding inline ReactFlow style prop silently — fixed by setting to `transparent`.
+
+### Decisions made
+- D039: Brand identity updated — DE=#3FB950 (green), SK=#E63946 (red). Supersedes D037.
+- D040: Unified navy theme — C.bg=#0D1117 across home + explore. Matches GitHub standard.
+- D041: Graph explore scroll reveal — sticky graph scales out (0.8) + fades, risk panel rises with purple ring. Same mechanic as home leaderboard.
+- D042: Vercel deploy confirmed — `npx vercel --prod` from frontend/ is the reliable path. Git push alone does not trigger auto-deploy.
+
+### What failed and how it was resolved
+- ReactFlow background not changing: `.react-flow__background { background: var(--bg) }` CSS override silently painting canvas warm charcoal regardless of inline style. Fixed by setting to `transparent` in index.css.
+- Graph scroll not working: ReactFlow capturing mouse wheel events. Fixed: `zoomOnScroll={false}` + `preventScrolling={false}` on ReactFlow component.
+- Ambient orb effects invisible: opacity 0.05-0.09 too low to see. Decided to use plain navy instead — cleaner result.
+
+### Where we stopped
+Phase: Operate. Both pages live on production. Boss meeting pending.
+
+### Learnings for next D3O cycle
+- Always check for CSS class overrides before debugging inline style failures
+- For bg color changes: two places only — `.react-flow__background` in index.css + `style` prop on ReactFlow component
+- `npx vercel --prod` from frontend/ is the deploy command, not git push
+
+---
+
 ## Checkpoint: "graph-page-redesign-locked" — 2026-05-10
 
 Phase        : Operate
