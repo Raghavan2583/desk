@@ -1,13 +1,48 @@
 :root {
-  --bg:      #0D1117;
-  --surface: #161B22;
-  --border:  #30363D;
-  --text:    #E6EDF3;
-  --muted:   #8B949E;
+  --bg:      #1A1614;
+  --surface: #242020;
+  --border:  #3D3735;
+  --text:    #F2EDE8;
+  --muted:   #A09890;
   --accent:  #58A6FF;
+  --cherry:  #C8102E;
+  --blush:   #E8A4A8;
+  --beige:   #C4B49A;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   color-scheme: dark;
+}
+
+@keyframes aurora-a {
+  0%, 100% { transform: translate(0, 0)     scale(1);    }
+  33%       { transform: translate(70px, -50px) scale(1.12); }
+  66%       { transform: translate(-40px, 35px) scale(0.92); }
+}
+@keyframes aurora-b {
+  0%, 100% { transform: translate(0, 0)       scale(1);    }
+  50%       { transform: translate(-90px, 55px) scale(1.18); }
+}
+@keyframes aurora-c {
+  0%, 100% { transform: translate(0, 0)      scale(1);    }
+  40%       { transform: translate(50px, 70px) scale(0.88); }
+  80%       { transform: translate(-60px, -25px) scale(1.08); }
+}
+
+@keyframes d-float-a {
+  0%, 100% { transform: translateY(0px)   rotate(-9deg); }
+  50%       { transform: translateY(-22px) rotate(-4deg); }
+}
+@keyframes d-float-b {
+  0%, 100% { transform: translateY(0px)   rotate(6deg);  }
+  50%       { transform: translateY(-26px) rotate(10deg); }
+}
+@keyframes d-float-c {
+  0%, 100% { transform: translateY(0px)   rotate(-4deg); }
+  50%       { transform: translateY(-15px) rotate(2deg);  }
+}
+@keyframes d-bounce {
+  0%, 100% { transform: translateY(0);   opacity: 0.5; }
+  50%       { transform: translateY(7px); opacity: 1;   }
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

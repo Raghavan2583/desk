@@ -3,28 +3,34 @@
 # Rule: NEVER exceed 30 lines.
 
 ## Current State
-Phase        : Operate
-Status       : Active — fully automated, orbital hero + brand identity live.
-Last updated : 2026-05-07
+Phase        : Operate — [PAUSED]
+Status       : UI session mid-flight. Home page visual redesign in progress.
+Last updated : 2026-05-08
 
 ## Last Session
-Date    : 2026-05-07 (evening)
+Date    : 2026-05-08 (evening)
 Agent   : Dhoni + Striker + Observer
-Summary : Vertical graph layout shipped. Home page rebuilt as risk dashboard
-          (leaderboard + health ring + stats). DEpendency riSK brand identity
-          locked (DE=blue, SK=orange). Orbital hero animation added. TL;DR
-          snapshot + CVE readability + substring search all shipped.
-          P2 (optional extras) confirmed already fixed — stale memory.
+Summary : Full home page UI redesign session. Boss gave green light. New palette
+          (warm charcoal base), DE=green/SK=red brand colors, floating stat cards
+          (GitHub-duck style), leaderboard panel peek at bottom. Core layout
+          alignment bug identified and fixed (asymmetric padding shifted content
+          left). Dev server WSL2 polling fix applied. Session paused mid-review.
 
-## Next Action
+## Last Completed Action
+Striker: Fixed hero layout alignment — content zone now proper flex row with
+         justifyContent:center on content column. CLI panel in right column.
+         Floating cards at fixed bottom:65px. Build clean. Awaiting Coach review.
+
+## Next Action — on resume
 Agent   : Dhoni + Striker
-Task    : Await boss meeting feedback. On return:
-          - P1 home page engagement features (Risk Movers, leaderboard tabs)
-          - Any UI changes from boss feedback
-Blocked : Boss meeting pending.
+Task    : Coach hard-refreshes http://localhost:5173 and confirms alignment fix.
+          If approved → Observer writes session handoff → /crew-end.
+          If further tweaks needed → Striker adjusts per Coach feedback.
+Note    : Dev server must be restarted on resume (WSL2 polling mode):
+          cd frontend && CHOKIDAR_USEPOLLING=true npx vite --port 5173
 
 ## Open Questions
-- None. Backlog is clean.
+- None pending. Awaiting visual confirmation from Coach.
 
 ## Token Budget
 GREEN

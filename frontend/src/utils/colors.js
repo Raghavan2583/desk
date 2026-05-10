@@ -19,10 +19,13 @@ export const ACTIVITY_COLORS = {
 }
 
 export const C = {
-  bg:      '#0D1117',
-  surface: '#161B22',
-  border:  '#30363D',
-  text:    '#E6EDF3',
-  muted:   '#8B949E',
+  bg:      '#1A1614',
+  surface: '#242020',
+  border:  '#3D3735',
+  text:    '#F2EDE8',
+  muted:   '#A09890',
   accent:  '#58A6FF',
+  cherry:  '#C8102E',
+  blush:   '#E8A4A8',
+  beige:   '#C4B49A',
 }

@@ -3,6 +3,29 @@
 
 ---
 
+## Checkpoint: "home-page-redesign-locked" — 2026-05-10
+
+Phase        : Operate
+Active agent : Striker + Observer
+State        :
+  - Hero: fully centered layout (no CLI panel), 64px headline, search bar centered,
+    inline stat row (1,000 · critical count · Daily). AuroraBg removed — plain C.bg background.
+    Orbital animation retained. Bottom 45% fade to C.bg for seamless scroll transition.
+  - Scroll effect: hero sticky (position:sticky), scales out (0.8) + fades on scroll,
+    leaderboard rises over it with zIndex:2.
+  - Leaderboard: macOS floating window (dark navy #13131E, traffic lights, title bar #1A1A2C).
+    Glowing second border ring via box-shadow (gap #1A1614 → purple ring → 4 scatter layers).
+    Top 20 packages, 4-column grid. Cards have risk-color glow borders.
+    Outer background matches hero (C.bg = #1A1614) — unified dark throughout.
+  - Brand identity: DE=#3FB950 (green), SK=#E63946 (red). Locked.
+Next action  : Await boss meeting feedback. P1 items: Risk Movers, leaderboard tabs.
+
+---
+
+## PAUSE — 2026-05-08 evening — UI redesign session mid-flight. Alignment fix applied, awaiting Coach visual confirmation. Resume: /crew-start.
+
+---
+
 ## Session: DESK — 2026-05-07 (evening) — ~4 hrs
 
 ### What happened

@@ -1,18 +1,23 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import SearchBar from './SearchBar'
 import { RISK_COLORS, C } from '../utils/colors'
 
 const ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+
+const DE_COLOR = '#3FB950'
+const SK_COLOR = '#E63946'
+const DE_GLOW  = '#3FB95099'
+const SK_GLOW  = '#E6394699'
 
 // ── Brand helpers ─────────────────────────────────────────────────────────── //
 
 export function Wordmark({ size = 72 }) {
   return (
     <div style={{ fontSize: size, fontWeight: 900, letterSpacing: '0.16em', lineHeight: 1, display: 'inline-flex' }}>
-      <span style={{ color: '#58A6FF', textShadow: '0 0 28px #58A6FF99' }}>D</span>
-      <span style={{ color: '#58A6FF', textShadow: '0 0 28px #58A6FF99' }}>E</span>
-      <span style={{ color: '#FF8C00', textShadow: '0 0 28px #FF8C0099' }}>S</span>
-      <span style={{ color: '#FF8C00', textShadow: '0 0 28px #FF8C0099' }}>K</span>
+      <span style={{ color: DE_COLOR, textShadow: `0 0 28px ${DE_GLOW}` }}>D</span>
+      <span style={{ color: DE_COLOR, textShadow: `0 0 28px ${DE_GLOW}` }}>E</span>
+      <span style={{ color: SK_COLOR, textShadow: `0 0 28px ${SK_GLOW}` }}>S</span>
+      <span style={{ color: SK_COLOR, textShadow: `0 0 28px ${SK_GLOW}` }}>K</span>
     </div>
   )
 }
@@ -20,19 +25,19 @@ export function Wordmark({ size = 72 }) {
 export function BrandName({ size = 13 }) {
   return (
     <span style={{ fontSize: size, letterSpacing: '0.02em' }}>
-      <span style={{ color: '#58A6FF', fontWeight: 700 }}>DE</span>
+      <span style={{ color: DE_COLOR, fontWeight: 700 }}>DE</span>
       <span style={{ color: C.muted }}>pendency ri</span>
-      <span style={{ color: '#FF8C00', fontWeight: 700 }}>SK</span>
+      <span style={{ color: SK_COLOR, fontWeight: 700 }}>SK</span>
     </span>
   )
 }
 
-// ── Orbital background ────────────────────────────────────────────────────── //
+// ── Orbital ───────────────────────────────────────────────────────────────── //
 
 const RINGS = [
-  { r: 80,  speed: 18, color: '#58A6FF', nodes: 4, size: 6   },
-  { r: 134, speed: 34, color: '#FF8C00', nodes: 6, size: 4.5 },
-  { r: 192, speed: 55, color: '#3FB950', nodes: 8, size: 3   },
+  { r: 80,  speed: 18, color: DE_COLOR, nodes: 4, size: 6   },
+  { r: 134, speed: 34, color: SK_COLOR, nodes: 6, size: 4.5 },
+  { r: 192, speed: 55, color: DE_COLOR, nodes: 8, size: 3   },
 ]
 
 function Orbital() {
@@ -41,65 +46,18 @@ function Orbital() {
       <style>{`
         @keyframes d-orb { to { transform: rotate(360deg);  } }
         @keyframes d-ctr { to { transform: rotate(-360deg); } }
-        @keyframes d-pls { 0%,100% { opacity:.5 } 50% { opacity:1 } }
+        @keyframes d-pls { 0%,100%{opacity:.2} 50%{opacity:.55} }
       `}</style>
-
-      <div style={{
-        position:      'absolute',
-        top: '50%',    left: '50%',
-        transform:     'translate(-50%, -50%)',
-        width:          430, height: 430,
-        pointerEvents: 'none',
-        userSelect:    'none',
-      }}>
-        {/* Ambient core glow */}
-        <div style={{
-          position:   'absolute',
-          inset:      0,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, #58A6FF1a 0%, #FF8C000a 42%, transparent 70%)',
-          animation:  'd-pls 4.5s ease-in-out infinite',
-        }} />
-
+      <div style={{ position:'absolute', top:'36%', left:'50%', transform:'translate(-50%,-50%)', width:430, height:430, pointerEvents:'none', zIndex:0 }}>
+        <div style={{ position:'absolute', inset:0, borderRadius:'50%', background:`radial-gradient(circle,${DE_COLOR}12 0%,${SK_COLOR}0a 42%,transparent 70%)`, animation:'d-pls 4.5s ease-in-out infinite' }}/>
         {RINGS.map((ring, ri) => (
           <div key={ri}>
-            {/* Ring track */}
-            <div style={{
-              position:     'absolute',
-              top: '50%',   left: '50%',
-              width:        ring.r * 2,
-              height:       ring.r * 2,
-              marginTop:   -ring.r,
-              marginLeft:  -ring.r,
-              border:      `1px solid ${ring.color}20`,
-              borderRadius: '50%',
-            }} />
-
-            {/* Nodes */}
-            {Array.from({ length: ring.nodes }).map((_, ni) => {
-              const dur = `${ring.speed}s`
-              const dly = `${-(ni / ring.nodes) * ring.speed}s`
+            <div style={{ position:'absolute', top:'50%', left:'50%', width:ring.r*2, height:ring.r*2, marginTop:-ring.r, marginLeft:-ring.r, border:`1px solid ${ring.color}18`, borderRadius:'50%' }}/>
+            {Array.from({length:ring.nodes}).map((_,ni)=>{
+              const dur=`${ring.speed}s`, dly=`${-(ni/ring.nodes)*ring.speed}s`
               return (
-                <div key={ni} style={{
-                  position:        'absolute',
-                  top: '50%',      left: '50%',
-                  width: 0,        height: 0,
-                  animation:       `d-orb ${dur} linear infinite`,
-                  animationDelay:  dly,
-                }}>
-                  <div style={{
-                    position:       'absolute',
-                    width:          ring.size,
-                    height:         ring.size,
-                    borderRadius:   '50%',
-                    background:     ring.color,
-                    top:           -(ring.size / 2),
-                    left:           ring.r - ring.size / 2,
-                    boxShadow:     `0 0 ${ring.size * 2.5}px ${ring.color}dd,
-                                    0 0 ${ring.size * 5}px   ${ring.color}55`,
-                    animation:      `d-ctr ${dur} linear infinite`,
-                    animationDelay: dly,
-                  }} />
+                <div key={ni} style={{ position:'absolute', top:'50%', left:'50%', width:0, height:0, animation:`d-orb ${dur} linear infinite`, animationDelay:dly }}>
+                  <div style={{ position:'absolute', width:ring.size, height:ring.size, borderRadius:'50%', background:ring.color, top:-(ring.size/2), left:ring.r-ring.size/2, boxShadow:`0 0 ${ring.size*2.5}px ${ring.color}dd,0 0 ${ring.size*5}px ${ring.color}44`, animation:`d-ctr ${dur} linear infinite`, animationDelay:dly }}/>
                 </div>
               )
             })}
@@ -110,80 +68,95 @@ function Orbital() {
   )
 }
 
-// ── Ecosystem health ring ─────────────────────────────────────────────────── //
+// ── Aurora background ─────────────────────────────────────────────────────── //
 
-function HealthRing({ graphData }) {
+function AuroraBg() {
+  const blob = (style) => (
+    <div style={{ position:'absolute', borderRadius:'50%', pointerEvents:'none', ...style }}/>
+  )
+  return (
+    <div style={{ position:'absolute', inset:0, overflow:'hidden', zIndex:0, pointerEvents:'none' }}>
+      {blob({ top:'-15%', left:'-8%',   width:780, height:780, background:`radial-gradient(circle, ${DE_COLOR}30 0%, ${DE_COLOR}10 44%, transparent 70%)`, filter:'blur(72px)', animation:'aurora-a 22s ease-in-out infinite' })}
+      {blob({ top:'5%',   right:'-12%', width:680, height:680, background:`radial-gradient(circle, ${SK_COLOR}28 0%, ${SK_COLOR}0e 42%, transparent 68%)`, filter:'blur(80px)', animation:'aurora-b 28s ease-in-out infinite' })}
+    </div>
+  )
+}
+
+// ── CLI health ────────────────────────────────────────────────────────────── //
+
+const CLI_DOT = { CRITICAL: SK_COLOR, HIGH: '#FF8C00', MEDIUM: '#FFD700', LOW: DE_COLOR }
+
+function CLIHealth({ graphData }) {
   const dist = useMemo(() => {
     if (!graphData?.nodes) return null
-    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
-    for (const n of graphData.nodes) {
-      const l = n.data?.risk_label
-      if (l in counts) counts[l]++
-    }
+    const counts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0 }
+    for (const n of graphData.nodes) { const l=n.data?.risk_label; if(l in counts) counts[l]++ }
     return counts
   }, [graphData])
 
-  if (!dist) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 180, color: C.muted, fontSize: 12 }}>
-        Loading…
-      </div>
-    )
-  }
-
-  const total = ORDER.reduce((s, k) => s + dist[k], 0)
-  const cx = 90, cy = 90, r = 62, sw = 20
-  const circ = 2 * Math.PI * r
-  const GAP = 3 / 360
-
-  let cum = 0
-  const segments = ORDER.map(label => {
-    const frac = dist[label] / total
-    const seg  = { label, frac, cum, color: RISK_COLORS[label], count: dist[label] }
-    cum += frac
-    return seg
-  })
-
   return (
-    <div>
-      <div style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-        color: C.muted, textTransform: 'uppercase', marginBottom: 20,
-      }}>
-        Ecosystem Health
+    <div style={{ background:'#0F0C0B', border:`1px solid ${SK_COLOR}44`, borderRadius:10, padding:'16px 18px', fontFamily:"'Courier New',Courier,monospace", fontSize:12, boxShadow:`0 0 28px ${SK_COLOR}22,0 4px 20px #00000066` }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
+        {[SK_COLOR,'#FF8C00',DE_COLOR].map((col,i)=>(
+          <span key={i} style={{ width:8, height:8, borderRadius:'50%', background:col, display:'inline-block' }}/>
+        ))}
+        <span style={{ marginLeft:8, color:C.muted, fontSize:10 }}>desk — health</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <svg width={180} height={180} style={{ flexShrink: 0 }}>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.border} strokeWidth={sw} />
-          <g transform={`rotate(-90 ${cx} ${cy})`}>
-            {segments.map(({ label, frac, cum, color }) => {
-              const visible = Math.max(0, frac - GAP) * circ
-              const offset  = -cum * circ
-              return (
-                <circle key={label} cx={cx} cy={cy} r={r}
-                  fill="none" stroke={color} strokeWidth={sw}
-                  strokeDasharray={`${visible} ${circ}`}
-                  strokeDashoffset={offset}
-                  strokeLinecap="butt"
-                  style={{ filter: label === 'CRITICAL' ? `drop-shadow(0 0 8px ${color}99)` : 'none' }}
-                />
-              )
-            })}
-          </g>
-          <text x={cx} y={cy - 8}  textAnchor="middle" fill={C.text}  fontSize={20} fontWeight={800} fontFamily="inherit">{total.toLocaleString()}</text>
-          <text x={cx} y={cy + 10} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="inherit">packages</text>
-        </svg>
+      <div style={{ marginBottom:8 }}>
+        <span style={{ color:SK_COLOR }}>$</span>
+        <span style={{ color:DE_COLOR }}> desk health</span>
+      </div>
+      <div style={{ color:C.border, marginBottom:8, fontSize:10 }}>────────────────</div>
+      {dist ? ORDER.map(label=>(
+        <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+            <span style={{ width:7, height:7, borderRadius:'50%', background:CLI_DOT[label], display:'inline-block', boxShadow:`0 0 5px ${CLI_DOT[label]}`, flexShrink:0 }}/>
+            <span style={{ color:CLI_DOT[label], fontWeight:700, fontSize:11, letterSpacing:'0.04em' }}>{label}</span>
+          </div>
+          <span style={{ color:C.text, fontVariantNumeric:'tabular-nums' }}>{dist[label]}</span>
+        </div>
+      )) : <div style={{ color:C.muted }}>loading...</div>}
+      <div style={{ color:C.border, marginTop:8, marginBottom:6, fontSize:10 }}>────────────────</div>
+      <div style={{ fontSize:10, color:C.muted }}>refresh: <span style={{ color:C.beige }}>daily · 02:07 UTC</span></div>
+    </div>
+  )
+}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {segments.map(({ label, color, count }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 5px ${color}88` }} />
-              <span style={{ fontSize: 11, color: C.muted, width: 58, letterSpacing: '0.04em' }}>{label}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
-            </div>
-          ))}
+// ── Floating stat cards (replace chess pieces) ────────────────────────────── //
+
+function FloatCard({ value, label, color, floatAnim, mb }) {
+  return (
+    <div style={{ animation: `${floatAnim} ease-in-out infinite`, marginBottom: mb, flexShrink: 0 }}>
+      <div style={{
+        background:   `linear-gradient(145deg, ${color}22 0%, ${C.surface} 55%)`,
+        border:       `1px solid ${color}77`,
+        borderRadius:  18,
+        padding:      '22px 30px',
+        textAlign:    'center',
+        minWidth:      140,
+        boxShadow:    `0 0 50px ${color}55, 0 24px 48px #00000088, inset 0 1px 0 ${color}44`,
+        backdropFilter: 'blur(4px)',
+      }}>
+        <div style={{ fontSize:38, fontWeight:900, color, lineHeight:1, textShadow:`0 0 30px ${color}99`, fontVariantNumeric:'tabular-nums' }}>
+          {value}
+        </div>
+        <div style={{ fontSize:10, color:C.muted, letterSpacing:'0.12em', textTransform:'uppercase', marginTop:9, lineHeight:1.4 }}>
+          {label}
         </div>
       </div>
+    </div>
+  )
+}
+
+function FloatingCards({ criticalCount }) {
+  return (
+    <div style={{ position:'absolute', bottom:65, left:0, right:0, display:'flex', justifyContent:'center', alignItems:'flex-end', gap:36, height:210, zIndex:4, pointerEvents:'none' }}>
+      {/* Spotlight glow on panel behind cards */}
+      <div style={{ position:'absolute', bottom:-10, left:'50%', transform:'translateX(-50%)', width:640, height:220, background:`radial-gradient(ellipse 65% 75% at 50% 90%, ${SK_COLOR}55 0%, ${DE_COLOR}33 38%, transparent 68%)`, filter:'blur(24px)', pointerEvents:'none' }}/>
+
+      <FloatCard value="1,000"        label="Packages Tracked" color={SK_COLOR}             floatAnim="d-float-a 5.5s" mb={22} />
+      <FloatCard value={criticalCount} label="Critical Risk"    color={RISK_COLORS.CRITICAL}  floatAnim="d-float-b 6.8s" mb={52} />
+      <FloatCard value="Daily"         label="Data Refresh"     color={DE_COLOR}              floatAnim="d-float-c 5.2s" mb={8}  />
     </div>
   )
 }
@@ -193,64 +166,49 @@ function HealthRing({ graphData }) {
 function Tile({ rank, node, onClick }) {
   const { package_name, risk_label, risk_score, blast_radius_count, trend_direction } = node.data
   const rc   = RISK_COLORS[risk_label] ?? C.muted
-  const trnd = trend_direction === 'RISING' ? '↑' : trend_direction === 'FALLING' ? '↓' : '→'
-  const tc   = trend_direction === 'RISING' ? RISK_COLORS.CRITICAL : trend_direction === 'FALLING' ? RISK_COLORS.LOW : C.muted
-  const top3 = rank <= 3
-
+  const trnd = trend_direction==='RISING'?'↑':trend_direction==='FALLING'?'↓':'→'
+  const tc   = trend_direction==='RISING'?RISK_COLORS.CRITICAL:trend_direction==='FALLING'?RISK_COLORS.LOW:C.muted
+  const baseGlow  = `0 0 0 1px ${rc}55, 0 0 8px 2px ${rc}44, 0 0 24px 4px ${rc}22, 0 2px 12px rgba(0,0,0,.6)`
+  const hoverGlow = `0 0 0 1px ${rc}88, 0 0 14px 3px ${rc}66, 0 0 40px 6px ${rc}33, 0 0 80px 10px ${rc}18, 0 8px 24px rgba(0,0,0,.65)`
   return (
-    <div
-      onClick={() => onClick(package_name)}
-      style={{
-        background:   C.surface,
-        border:       `1px solid ${top3 ? rc + '55' : C.border}`,
-        borderRadius: 10,
-        padding:      '14px 16px',
-        cursor:       'pointer',
-        position:     'relative',
-        overflow:     'hidden',
-        transition:   'transform 0.12s, box-shadow 0.12s, border-color 0.12s',
-        boxShadow:    rank === 1 ? `0 0 24px ${rc}33, 0 2px 8px rgba(0,0,0,0.4)` : '0 2px 8px rgba(0,0,0,0.3)',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform   = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow   = `0 0 20px ${rc}44, 0 8px 20px rgba(0,0,0,0.5)`
-        e.currentTarget.style.borderColor = rc + '99'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform   = 'translateY(0)'
-        e.currentTarget.style.boxShadow   = rank === 1 ? `0 0 24px ${rc}33, 0 2px 8px rgba(0,0,0,0.4)` : '0 2px 8px rgba(0,0,0,0.3)'
-        e.currentTarget.style.borderColor = top3 ? rc + '55' : C.border
-      }}
+    <div onClick={()=>onClick(package_name)}
+      style={{ background:`linear-gradient(145deg,${rc}0d 0%,${C.surface} 58%)`, border:`1px solid ${rc}66`, borderRadius:12, padding:'16px 18px', cursor:'pointer', position:'relative', overflow:'hidden', transition:'transform 0.15s,box-shadow 0.15s,border-color 0.15s', boxShadow:baseGlow }}
+      onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-3px)'; e.currentTarget.style.boxShadow=hoverGlow; e.currentTarget.style.borderColor=`${rc}99` }}
+      onMouseLeave={e=>{ e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow=baseGlow; e.currentTarget.style.borderColor=`${rc}66` }}
     >
-      <div style={{
-        position: 'absolute', right: 6, top: 2,
-        fontSize: 34, fontWeight: 900, lineHeight: 1,
-        color: top3 ? rc + '1a' : C.border + '55',
-        userSelect: 'none', pointerEvents: 'none',
-      }}>
-        {rank}
+      <div style={{ position:'absolute', right:6, top:2, fontSize:34, fontWeight:900, lineHeight:1, color:`${rc}1a`, userSelect:'none', pointerEvents:'none' }}>{rank}</div>
+      <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, paddingRight:28, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{package_name}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+        <span style={{ fontSize:9, fontWeight:700, color:rc, background:`${rc}22`, border:`1px solid ${rc}55`, borderRadius:3, padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.04em' }}>{risk_label}</span>
+        <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{risk_score}</span>
+        <span style={{ fontSize:11, fontWeight:700, color:tc, marginLeft:2 }}>{trnd}</span>
       </div>
+      <div style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</div>
+    </div>
+  )
+}
 
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8, paddingRight: 28, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {package_name}
-      </div>
+// ── Stat pill row ─────────────────────────────────────────────────────────── //
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <span style={{
-          fontSize: 9, fontWeight: 700, color: rc,
-          background: rc + '22', border: `1px solid ${rc}55`,
-          borderRadius: 3, padding: '1px 5px',
-          textTransform: 'uppercase', letterSpacing: '0.04em',
-        }}>
-          {risk_label}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{risk_score}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: tc, marginLeft: 2 }}>{trnd}</span>
-      </div>
-
-      <div style={{ fontSize: 10, color: C.muted }}>
-        {(blast_radius_count ?? 0).toLocaleString()} dependents
-      </div>
+function StatRow({ criticalCount }) {
+  const items = [
+    { value: '1,000', label: 'packages tracked', color: C.text },
+    { value: criticalCount, label: 'critical risk', color: RISK_COLORS.CRITICAL },
+    { value: 'Daily', label: 'data refresh', color: DE_COLOR },
+  ]
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:0, marginTop:20 }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:6, padding:'0 24px' }}>
+            <span style={{ fontSize:22, fontWeight:800, color:item.color, fontVariantNumeric:'tabular-nums' }}>{item.value}</span>
+            <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>{item.label}</span>
+          </div>
+          {i < items.length - 1 && (
+            <span style={{ color:C.border, fontSize:18, lineHeight:1 }}>·</span>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -258,12 +216,37 @@ function Tile({ rank, node, onClick }) {
 // ── Home screen ───────────────────────────────────────────────────────────── //
 
 export default function HomeScreen({ indexData, graphData, onSearch, loading }) {
+  const containerRef    = useRef(null)
+  const leaderboardRef  = useRef(null)
+  const heroContentRef  = useRef(null)
+  const [leaderboardVisible, setLeaderboardVisible] = useState(false)
+
+  function handleScroll(e) {
+    const p = Math.min(e.currentTarget.scrollTop / (window.innerHeight * 0.65), 1)
+    if (heroContentRef.current) {
+      heroContentRef.current.style.transform = `scale(${(1 - p * 0.2).toFixed(4)})`
+      heroContentRef.current.style.opacity   = Math.max(0, 1 - p * 1.6).toFixed(4)
+    }
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    const target    = leaderboardRef.current
+    if (!container || !target) return
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) setLeaderboardVisible(true) },
+      { root: container, threshold: 0.05 },
+    )
+    obs.observe(target)
+    return () => obs.disconnect()
+  }, [])
+
   const leaderboard = useMemo(() => {
     if (!graphData?.nodes) return []
     return [...graphData.nodes]
       .filter(n => (n.data?.blast_radius_count ?? 0) > 0)
       .sort((a, b) => (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0))
-      .slice(0, 10)
+      .slice(0, 20)
   }, [graphData])
 
   const criticalCount = useMemo(() => {
@@ -272,147 +255,96 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
   }, [graphData])
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: C.bg }}>
+    <div ref={containerRef} style={{ flex:1, overflowY:'auto', background:C.bg }} onScroll={handleScroll}>
 
-      {/* ── Hero ── */}
-      <div style={{
-        position:        'relative',
-        minHeight:        460,
-        display:         'flex',
-        alignItems:      'center',
-        justifyContent:  'center',
-        overflow:        'hidden',
-        background:      `radial-gradient(ellipse 70% 90% at 50% 50%, #091525 0%, ${C.bg} 68%)`,
-        borderBottom:    `1px solid ${C.border}`,
-      }}>
+      {/* ══════════════════════════════════════════
+          HERO — sticky, zooms out on scroll
+          ══════════════════════════════════════════ */}
+      <div style={{ height:'100vh', position:'sticky', top:0, overflow:'hidden', background:C.bg, zIndex:1 }}>
+
+        {/* Orbital */}
         <Orbital />
 
-        <div style={{
-          position:      'relative',
-          zIndex:         1,
+        {/* ── Content zone: fully centered column, scales out on scroll ── */}
+        <div ref={heroContentRef} style={{
+          position:      'absolute',
+          inset:          0,
           display:       'flex',
           flexDirection: 'column',
           alignItems:    'center',
+          justifyContent:'center',
           textAlign:     'center',
-          gap:            12,
-          padding:       '64px 32px 56px',
+          padding:       '0 48px',
+          zIndex:         2,
+          gap:            0,
+          transformOrigin:'center center',
+          willChange:    'transform, opacity',
         }}>
-          <Wordmark size={78} />
+          <Wordmark size={80} />
 
-          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <BrandName size={14} />
-            <span style={{ color: C.border }}>·</span>
-            <span style={{ fontSize: 13, color: C.muted, letterSpacing: '0.04em' }}>
-              PyPI Ecosystem Intelligence
-            </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14 }}>
+            <BrandName size={13}/>
+            <span style={{ color:C.border }}>·</span>
+            <span style={{ fontSize:12, color:C.muted, letterSpacing:'0.04em' }}>PyPI Ecosystem Intelligence</span>
           </div>
 
-          <div style={{ marginTop: 16, width: '100%', maxWidth: 580 }}>
-            <SearchBar packages={indexData} onSearch={onSearch} />
+          <h1 style={{ fontSize:64, fontWeight:900, lineHeight:1.1, letterSpacing:'-0.03em', color:C.text, margin:'28px 0 0', maxWidth:740 }}>
+            Every dependency is a bet.{' '}
+            <span style={{ color:SK_COLOR, textShadow:`0 0 60px ${SK_GLOW}` }}>Know the odds.</span>
+          </h1>
+
+          <p style={{ fontSize:18, color:C.muted, lineHeight:1.65, maxWidth:480, margin:'20px 0 0' }}>
+            Map the blast radius across 1,000 PyPI packages.<br/>See what breaks before it does.
+          </p>
+
+          <div style={{ marginTop:28 }}>
+            <SearchBar packages={indexData} onSearch={onSearch}/>
           </div>
 
-          {loading && (
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Loading…</div>
-          )}
+          {loading && <div style={{ fontSize:12, color:C.muted, marginTop:10 }}>Loading…</div>}
+
+          <StatRow criticalCount={criticalCount} />
+        </div>
+
+        {/* ── Scroll hint ── */}
+        <div style={{ position:'absolute', bottom:28, left:0, right:0, display:'flex', justifyContent:'center', zIndex:3, pointerEvents:'none' }}>
+          <span style={{ fontSize:20, color:C.muted, animation:'d-bounce 2.2s ease-in-out infinite' }}>↓</span>
         </div>
       </div>
 
-      {/* ── Stats strip ── */}
-      <div style={{
-        display:      'flex',
-        justifyContent:'center',
-        background:   C.surface,
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        {[
-          { value: '1,000',       label: 'Packages Tracked', color: C.accent           },
-          { value: criticalCount, label: 'Critical Risk',     color: RISK_COLORS.CRITICAL },
-          { value: 'Daily',       label: 'Data Refresh',      color: RISK_COLORS.LOW    },
-        ].map((s, i) => (
-          <div key={i} style={{
-            flex:        '0 0 220px',
-            textAlign:   'center',
-            padding:     '22px 0',
-            borderRight: i < 2 ? `1px solid ${C.border}` : 'none',
-          }}>
-            <div style={{
-              fontSize:    26,
-              fontWeight:  800,
-              color:       s.color,
-              lineHeight:  1,
-              marginBottom: 6,
-              textShadow:  `0 0 20px ${s.color}44`,
-            }}>
-              {s.value}
-            </div>
-            <div style={{
-              fontSize:      10,
-              color:         C.muted,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-            }}>
-              {s.label}
-            </div>
+      {/* ══════════════════════════════════════════
+          LEADERBOARD — exact replica of reference
+          dark navy bg + blue-purple ambient glow
+          ══════════════════════════════════════════ */}
+      <div ref={leaderboardRef} style={{ position:'relative', zIndex:2, background:C.bg, padding:'72px 72px 88px', transform:leaderboardVisible?'translateY(0)':'translateY(60px)', opacity:leaderboardVisible?1:0, transition:'transform 0.85s cubic-bezier(0.16,1,0.3,1),opacity 0.7s ease' }}>
+
+        {/* Floating window */}
+        <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', background:'#13131E', borderRadius:14, border:'1px solid rgba(255,255,255,0.09)', boxShadow:'0 36px 100px rgba(0,0,0,0.88), 0 0 0 3px #1A1614, 0 0 0 5px rgba(110,80,220,0.70), 0 0 20px 6px rgba(100,70,210,0.55), 0 0 50px 12px rgba(90,60,200,0.30), 0 0 100px 22px rgba(80,50,190,0.15), 0 0 200px 40px rgba(70,45,180,0.07)', overflow:'hidden' }}>
+
+          {/* Title bar — macOS style */}
+          <div style={{ display:'flex', alignItems:'center', gap:7, padding:'12px 18px', background:'#1A1A2C', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
+            <span style={{ width:12, height:12, borderRadius:'50%', background:'#FF5F56', display:'inline-block', flexShrink:0 }}/>
+            <span style={{ width:12, height:12, borderRadius:'50%', background:'#FFBD2E', display:'inline-block', flexShrink:0 }}/>
+            <span style={{ width:12, height:12, borderRadius:'50%', background:'#27C93F', display:'inline-block', flexShrink:0 }}/>
+            <span style={{ marginLeft:14, fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.4)', letterSpacing:'0.04em' }}>Blast Radius Leaderboard</span>
+            <span style={{ fontSize:11, color:'rgba(255,255,255,0.2)' }}>— packages that break the most if they fail</span>
           </div>
-        ))}
-      </div>
 
-      {/* ── Main content ── */}
-      <div style={{
-        flex:           1,
-        display:        'flex',
-        justifyContent: 'center',
-        padding:        '40px 48px 52px',
-      }}>
-        <div style={{ width: '100%', maxWidth: 1100, display: 'flex', gap: 32, alignItems: 'flex-start' }}>
-
-          {/* Leaderboard */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              display:       'flex',
-              alignItems:    'baseline',
-              gap:            10,
-              marginBottom:  20,
-              paddingBottom: 14,
-              borderBottom:  `1px solid ${C.border}`,
-            }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700,
-                letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: C.text,
-              }}>
-                Blast Radius Leaderboard
-              </span>
-              <span style={{ fontSize: 11, color: C.muted }}>
-                — packages that break the most if they fail
-              </span>
-            </div>
-
-            {leaderboard.length === 0 ? (
-              <div style={{ color: C.muted, fontSize: 13, padding: '20px 0' }}>Loading…</div>
+          {/* Content */}
+          <div style={{ padding:'22px 26px 30px' }}>
+            {leaderboard.length===0 ? (
+              <div style={{ color:C.muted, fontSize:13 }}>Loading…</div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-                {leaderboard.map((node, i) => (
-                  <Tile key={node.id} rank={i + 1} node={node} onClick={onSearch} />
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+                {leaderboard.map((node,i)=>(
+                  <Tile key={node.id} rank={i+1} node={node} onClick={onSearch}/>
                 ))}
               </div>
             )}
           </div>
-
-          {/* Health ring */}
-          <div style={{
-            flexShrink:   0,
-            width:        260,
-            background:   C.surface,
-            border:       `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding:      '24px',
-          }}>
-            <HealthRing graphData={graphData} />
-          </div>
-
         </div>
       </div>
+
     </div>
   )
 }
