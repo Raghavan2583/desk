@@ -3,6 +3,30 @@
 
 ---
 
+## Checkpoint: "graph-page-redesign-locked" — 2026-05-10
+
+Phase        : Operate
+Active agent : Striker + Observer
+State        :
+  - Graph canvas: navy blue #0D1117 background (GitHub standard), transparent ReactFlow
+    background SVG so CSS no longer overrides it
+  - Edges: electric cyan #00D4FF (deps) + neon magenta #FF2D9A (dependents),
+    both with drop-shadow glow filter
+  - Focal node: risk-coloured gradient card with top colour stripe + slow breathing
+    pulse animation (1.6s interval)
+  - Regular nodes: coloured top stripe + gradient body + risk-colour glow on hover
+  - Stats bar: floating pill top-center (deps · dependents · blast radius · CVEs)
+  - Fit-to-screen button: bottom-right, purple border, SVG icon
+  - Graph page scroll: graph zooms out (sticky), risk panel rises up from below
+    with purple glowing border ring
+  - Risk panel: 3-column header (package info · maintainer strip · risk score),
+    CVEs in 2-column grid, dependencies side by side
+  - Top bar: navy #0D1117, package breadcrumb + version + risk badge (glowing)
+  - Entire explore view unified: #0D1117 throughout (top bar, canvas, gutters)
+Next action  : Boss meeting feedback → decide on further P1 items
+
+---
+
 ## Checkpoint: "home-page-redesign-locked" — 2026-05-10
 
 Phase        : Operate

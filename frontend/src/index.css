@@ -13,6 +13,11 @@
   color-scheme: dark;
 }
 
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--rc)99, 0 0 14px 4px var(--rc)66, 0 0 36px 8px var(--rc)33, 0 0 72px 14px var(--rc)18; }
+  50%       { box-shadow: 0 0 0 2px var(--rc)CC, 0 0 22px 6px var(--rc)88, 0 0 55px 12px var(--rc)44, 0 0 100px 20px var(--rc)22; }
+}
+
 @keyframes aurora-a {
   0%, 100% { transform: translate(0, 0)     scale(1);    }
   33%       { transform: translate(70px, -50px) scale(1.12); }
@@ -55,7 +60,7 @@ body {
 }
 
 /* React Flow overrides */
-.react-flow__background { background: var(--bg); }
+.react-flow__background { background: transparent; }
 .react-flow__edge-path  { stroke: #30363D; }
 .react-flow__controls   { background: var(--surface); border: 1px solid var(--border); }
 .react-flow__controls-button {

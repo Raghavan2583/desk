@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import ReactFlow, {
   Background,
-  Controls,
   Panel,
   MarkerType,
   useNodesState,
@@ -13,36 +12,39 @@ import 'reactflow/dist/style.css'
 import PackageNode from './PackageNode'
 import { NODE_WIDTH, NODE_HEIGHT } from './PackageNode'
 import { getVisibleSubgraph, applyColumnLayout, ROW_CENTER_Y } from '../utils/graph'
-import { C } from '../utils/colors'
+import { RISK_COLORS, C } from '../utils/colors'
 
-const EDGE_COLOR = { dep: '#FF8C00', usedBy: '#3FB950' }
+const EDGE_COLOR = { dep: '#00D4FF', usedBy: '#FF2D9A' }
 
 function GroupHeaderNode({ data }) {
   return (
     <div style={{
       width:         NODE_WIDTH,
       textAlign:     'center',
-      fontSize:      10,
-      fontWeight:    700,
-      letterSpacing: '0.1em',
-      textTransform: 'uppercase',
-      color:         data.color,
-      opacity:       0.75,
       pointerEvents: 'none',
       userSelect:    'none',
     }}>
-      {data.label}
+      <span style={{
+        fontSize:      10,
+        fontWeight:    700,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color:         data.color,
+        opacity:       0.75,
+      }}>
+        {data.label}
+      </span>
     </div>
   )
 }
 
 const NODE_TYPES = { packageNode: PackageNode, groupHeader: GroupHeaderNode }
 
-function LayoutController({ rfNodes, rfEdges, focusedPackage }) {
+function LayoutController({ rfNodes, focusedPackage }) {
   const { fitView } = useReactFlow()
   useEffect(() => {
     if (rfNodes.length > 0) {
-      setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50)
+      setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 50)
     }
   }, [focusedPackage, rfNodes.length, fitView])
   return null
@@ -53,6 +55,7 @@ export default function GraphCanvas({
   focusedPackage,
   expandedPackages,
   onNodeClick,
+  packageData,
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -61,6 +64,16 @@ export default function GraphCanvas({
     if (!graphData || !focusedPackage) return { nodes: [], edges: [], totalNeighborCount: 0, isCapped: false }
     return getVisibleSubgraph(graphData, focusedPackage, expandedPackages)
   }, [graphData, focusedPackage, expandedPackages])
+
+  // Stats for the info bar
+  const { depsCount, usedByCount } = useMemo(() => {
+    const depSet = new Set(), usedBySet = new Set()
+    for (const e of visEdges) {
+      if (e.source === focusedPackage) depSet.add(e.target)
+      if (e.target === focusedPackage) usedBySet.add(e.source)
+    }
+    return { depsCount: depSet.size, usedByCount: usedBySet.size }
+  }, [visEdges, focusedPackage])
 
   useEffect(() => {
     if (!visNodes.length) return
@@ -86,17 +99,14 @@ export default function GraphCanvas({
     }))
 
     const rfEdges = visEdges.map(e => {
-      // e.source===focal → focal depends on e.target → e.target is TOP row (dep)
-      // e.target===focal → e.source depends on focal → e.source is BOTTOM row (usedBy)
-      // Swap source/target so all arrows flow top → bottom
       const isDepEdge = e.source === focusedPackage
       const color     = isDepEdge ? EDGE_COLOR.dep : EDGE_COLOR.usedBy
       return {
         id:        e.id,
-        source:    e.target,   // left-column node (dep or focal)
-        target:    e.source,   // right-column node (focal or usedBy)
+        source:    e.target,
+        target:    e.source,
         type:      'smoothstep',
-        style:     { stroke: color, strokeWidth: 2 },
+        style:     { stroke: color, strokeWidth: 2, filter:`drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color}88)` },
         animated:  true,
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
       }
@@ -104,12 +114,8 @@ export default function GraphCanvas({
 
     const laidOut = applyColumnLayout(rfNodes, focusedPackage)
 
-    // Floating column headers — positioned just above the top node of each column
-    const depsCount   = depSet.size
-    const usedByCount = usedBySet.size
     const headerNodes = []
-
-    if (depsCount > 0) {
+    if (depSet.size > 0) {
       headerNodes.push({
         id: '__header_deps', type: 'groupHeader',
         data: { label: '↑ Depends on', color: EDGE_COLOR.dep },
@@ -117,7 +123,7 @@ export default function GraphCanvas({
         draggable: false, selectable: false, focusable: false,
       })
     }
-    if (usedByCount > 0) {
+    if (usedBySet.size > 0) {
       headerNodes.push({
         id: '__header_used_by', type: 'groupHeader',
         data: { label: 'Used by ↓', color: EDGE_COLOR.usedBy },
@@ -135,6 +141,8 @@ export default function GraphCanvas({
     onNodeClick(node.id)
   }
 
+  const riskColor = RISK_COLORS[packageData?.risk_label] ?? C.muted
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -144,36 +152,111 @@ export default function GraphCanvas({
       onNodeClick={handleNodeClick}
       nodeTypes={NODE_TYPES}
       fitView
-      fitViewOptions={{ padding: 0.2 }}
+      fitViewOptions={{ padding: 0.22 }}
       minZoom={0.2}
       maxZoom={3}
-      style={{ background: C.bg }}
+      zoomOnScroll={false}
+      preventScrolling={false}
+      style={{ background: '#0D1117' }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background color={C.border} gap={32} size={1} />
-      <Controls showInteractive={false} />
-      <LayoutController
-        rfNodes={nodes}
-        rfEdges={edges}
-        focusedPackage={focusedPackage}
-      />
+      <Background color="rgba(255,255,255,0.05)" gap={36} size={1.2} />
 
-      {/* Neighbor cap notice — top center */}
-      {isCapped && (
+
+      {/* ── Stats bar — top center ── */}
+      {packageData && (
         <Panel position="top-center">
           <div style={{
-            background:   C.surface + 'ee',
-            border:       `1px solid ${C.border}`,
-            borderRadius: 6,
-            padding:      '6px 12px',
-            fontSize:     11,
-            color:        C.muted,
-            marginTop:    8,
+            display:       'flex',
+            alignItems:    'center',
+            gap:           16,
+            padding:       '8px 18px',
+            marginTop:     12,
+            background:    'rgba(19,19,30,0.88)',
+            border:        '1px solid rgba(255,255,255,0.08)',
+            borderRadius:  8,
+            backdropFilter:'blur(8px)',
+            fontSize:      12,
           }}>
-            Showing top 15 of {totalNeighborCount} connections — click any node to focus on it
+            <StatChip value={depsCount} label="deps" color={EDGE_COLOR.dep} />
+            <Sep />
+            <StatChip value={usedByCount} label="dependents" color={EDGE_COLOR.usedBy} />
+            <Sep />
+            <StatChip value={(packageData.blast_radius_count ?? 0).toLocaleString()} label="blast radius" color={riskColor} />
+            {packageData.cves?.length > 0 && (
+              <>
+                <Sep />
+                <StatChip value={packageData.cves.length} label="CVEs" color={RISK_COLORS.CRITICAL} />
+              </>
+            )}
+            {isCapped && (
+              <>
+                <Sep />
+                <span style={{ fontSize:11, color:C.muted }}>showing 15 of {totalNeighborCount}</span>
+              </>
+            )}
           </div>
         </Panel>
       )}
+
+      {/* ── Fit-to-screen button — bottom right ── */}
+      <Panel position="bottom-right">
+        <FitButton />
+      </Panel>
+
+      <LayoutController rfNodes={nodes} focusedPackage={focusedPackage} />
     </ReactFlow>
   )
 }
+
+function FitButton() {
+  const { fitView } = useReactFlow()
+  return (
+    <button
+      onClick={() => fitView({ padding: 0.22, duration: 400 })}
+      title="Fit graph to screen"
+      style={{
+        width: 36, height: 36,
+        borderRadius: 8,
+        background: '#1E1A2E',
+        border: '1px solid rgba(110,80,220,0.45)',
+        color: 'rgba(255,255,255,0.8)',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: 72, marginRight: 12,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)',
+        transition: 'background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background  = 'rgba(110,80,220,0.3)'
+        e.currentTarget.style.borderColor = 'rgba(110,80,220,0.8)'
+        e.currentTarget.style.color       = '#fff'
+        e.currentTarget.style.boxShadow   = '0 0 16px 3px rgba(110,80,220,0.5)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background  = '#1E1A2E'
+        e.currentTarget.style.borderColor = 'rgba(110,80,220,0.45)'
+        e.currentTarget.style.color       = 'rgba(255,255,255,0.8)'
+        e.currentTarget.style.boxShadow   = '0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)'
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4"/>
+      </svg>
+    </button>
+  )
+}
+
+function StatChip({ value, label, color }) {
+  return (
+    <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+      <span style={{ fontWeight:700, color, fontSize:13 }}>{value}</span>
+      <span style={{ color:C.muted, fontSize:11 }}>{label}</span>
+    </div>
+  )
+}
+
+function Sep() {
+  return <span style={{ color:'rgba(255,255,255,0.12)', fontSize:14 }}>·</span>
+}
+
