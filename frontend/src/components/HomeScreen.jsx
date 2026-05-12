@@ -355,23 +355,38 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
         {/* Floating window */}
         <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', background:'#13131E', borderRadius:14, border:'1px solid rgba(255,255,255,0.09)', boxShadow:'0 36px 100px rgba(0,0,0,0.88), 0 0 0 3px #0D1117, 0 0 0 5px rgba(110,80,220,0.70), 0 0 20px 6px rgba(100,70,210,0.55), 0 0 50px 12px rgba(90,60,200,0.30), 0 0 100px 22px rgba(80,50,190,0.15), 0 0 200px 40px rgba(70,45,180,0.07)', overflow:'hidden' }}>
 
-          {/* Title bar — macOS style */}
-          <div style={{ display:'flex', alignItems:'center', gap:7, padding:'12px 18px', background:'#1A1A2C', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
-            <span style={{ width:12, height:12, borderRadius:'50%', background:'#FF5F56', display:'inline-block', flexShrink:0 }}/>
-            <span style={{ width:12, height:12, borderRadius:'50%', background:'#FFBD2E', display:'inline-block', flexShrink:0 }}/>
-            <span style={{ width:12, height:12, borderRadius:'50%', background:'#27C93F', display:'inline-block', flexShrink:0 }}/>
-            <span style={{ marginLeft:14, fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.4)', letterSpacing:'0.04em' }}>
-              {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : 'Risk Score Leaderboard'}
-            </span>
-            <span style={{ fontSize:11, color:'rgba(255,255,255,0.2)' }}>
-              {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : '— packages with the highest risk scores'}
-            </span>
-            <div style={{ marginLeft:'auto', display:'flex', gap:4 }}>
-              {[['blast_radius','Blast Radius'],['risk_score','Risk Score']].map(([mode, label]) => (
-                <button key={mode} onClick={() => setSortBy(mode)}
-                  style={{ fontSize:10, fontWeight:700, color: sortBy===mode ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)', background: sortBy===mode ? 'rgba(255,255,255,0.1)' : 'transparent', border:`1px solid ${sortBy===mode ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit', letterSpacing:'0.04em', textTransform:'uppercase', transition:'all 0.12s' }}
-                >{label}</button>
-              ))}
+          {/* Title bar */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 20px', background:'linear-gradient(90deg,#1A1A2E 0%,#16162A 100%)', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
+            {/* Title + subtitle */}
+            <div style={{ display:'flex', alignItems:'baseline', gap:10, minWidth:0 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:sortBy==='blast_radius' ? '#FF2D9A' : '#00D4FF', letterSpacing:'0.04em', transition:'color 0.2s', textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : '0 0 18px #00D4FF66', whiteSpace:'nowrap' }}>
+                {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : 'Risk Score Leaderboard'}
+              </span>
+              <span style={{ fontSize:11, color:'rgba(160,140,255,0.55)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : '— packages with the highest risk scores'}
+              </span>
+            </div>
+
+            {/* Sort toggle */}
+            <div style={{ marginLeft:'auto', display:'flex', gap:6, flexShrink:0 }}>
+              {[
+                { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
+                { mode:'risk_score',   label:'Risk Score',   color:'#00D4FF' },
+              ].map(({ mode, label, color }) => {
+                const active = sortBy === mode
+                return (
+                  <button key={mode} onClick={() => setSortBy(mode)}
+                    style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'inherit', cursor:'pointer', borderRadius:6, padding:'4px 12px', transition:'all 0.15s',
+                      color:      active ? color                  : `${color}55`,
+                      background: active ? `${color}18`           : 'transparent',
+                      border:     active ? `1px solid ${color}66` : `1px solid ${color}22`,
+                      boxShadow:  active ? `0 0 12px 2px ${color}33` : 'none',
+                    }}
+                    onMouseEnter={e=>{ if (!active) { e.currentTarget.style.color=`${color}99`; e.currentTarget.style.borderColor=`${color}44` }}}
+                    onMouseLeave={e=>{ if (!active) { e.currentTarget.style.color=`${color}55`; e.currentTarget.style.borderColor=`${color}22` }}}
+                  >{label}</button>
+                )
+              })}
             </div>
           </div>
 
