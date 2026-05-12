@@ -36,16 +36,15 @@ Pipeline : daily_refresh.yml — 02:07 UTC daily
 Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-10 — Full frontend overhaul. Home page: centered hero, navy bg, macOS leaderboard
-window with purple glow ring, scroll zoom-out. Graph page: scroll reveal mechanic, navy
-#0D1117 canvas, cyan/magenta glowing edges, focal node pulse, 3-column risk panel, compact
-layout. Brand: DE=green, SK=red. Both pages live on production.
+2026-05-12 (evening) — UI polish session. Lost commits recovered. CVE panel rebuilt with
+version-aware remediation (SAFE VERSION badge, patched/unpatched split, one-word verdict).
+Leaderboard title bar redesigned. Homepage wordmark → indigo+rose. Pencil.dev MCP set up.
 
 ## Next Action
-Await boss meeting feedback. P1 candidates:
-  - Risk Movers widget (packages trending up in risk)
+Await next boss feedback round or self-initiate:
+  - Risk Movers widget (packages trending up in risk this week)
   - Leaderboard tabs (by blast radius / by risk score / by CVE count)
-  - Any feedback from boss demo session
+  - Graph mini-map toggle
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/

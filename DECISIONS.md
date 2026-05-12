@@ -209,6 +209,41 @@ DECISION: index.css `.react-flow__background` set to `background: transparent`. 
 RATIONALE: The CSS class override silently painted the canvas regardless of any inline style set in React. This caused every background change attempt to fail. Transparent is the correct default — the React prop controls the colour.
 LOCKED: 2026-05-10
 
+## D043 — Risk Driver Banner: Data-Driven, Not Prescriptive
+DECISION: Package detail card shows a `getPrimaryRiskDriver()` computed sentence (e.g. "2 critical vulnerabilities with no patch released yet") instead of a static action label (e.g. "Update Recommended"). Banner hidden if no meaningful signal.
+RATIONALE: Prescriptive labels without supporting data (version to update to, alternative package) erode trust. The function reads actual CVEs, maintainer state, trend history, blast radius and returns only what the data supports.
+LOCKED: 2026-05-12
+
+## D044 — Tooltip: position fixed + getBoundingClientRect
+DECISION: Tooltip component uses `position: fixed` with coordinates from `getBoundingClientRect()` on the trigger element.
+RATIONALE: `position: absolute` tooltips are clipped by `overflowY: auto` scroll containers (the explore view's outer div). Fixed positioning is viewport-relative — cannot be clipped by any parent regardless of overflow or stacking context.
+LOCKED: 2026-05-12
+
+## D045 — URL Routing: ?pkg= Deep Links
+DECISION: Viewing a package writes `?pkg=name` to the URL via `window.history.replaceState`. On mount, the URL param is read and that package is loaded automatically.
+RATIONALE: Enables share/copy link button to produce a URL that lands on the correct package. No router library required — native History API sufficient.
+LOCKED: 2026-05-12
+
+## D046 — Pipeline Schedule Drift: Accepted
+DECISION: GitHub Actions scheduled runs fire 3-4 hours after the configured 02:07 UTC cron time on low-activity repos. No fix applied.
+RATIONALE: GitHub delays scheduled jobs in a global queue, prioritising high-activity repos. The data still refreshes daily — the exact hour is irrelevant for a risk intelligence tool showing week-over-week trends.
+LOCKED: 2026-05-12
+
+## D047 — Pencil.dev as Global Design Tool
+DECISION: Pencil.dev (https://www.pencil.dev/) is the standard design tool for all projects with a frontend UI. MCP server configured globally in ~/.claude/mcp.json. Fallback: Figma if Pencil.dev pricing becomes unreasonable post-early-access.
+RATIONALE: Boss direction. Pencil.dev is IDE-native, React-aware, currently free in early access. Closes the gap between verbal design descriptions and actual UI output. Exit strategy documented upfront to avoid lock-in.
+LOCKED: 2026-05-12
+
+## D048 — CVE Panel: Version-Aware Remediation
+DECISION: CVE section shows a computed safe version (highest fixed_in_version across all CVEs via semver compare), a breathing white SAFE VERSION badge, and splits CVEs into patched (→ vX.X.X in green) and unpatched (no fix yet in red) groups. Risk driver banner uses one-word label chip: UPGRADE / CRITICAL / MONITOR / ABANDONED / STALE / RISING / EXPOSURE.
+RATIONALE: Raw CVE counts cause alert fatigue. Developers need the safe version to upgrade to, not a number. Data was already present in fixed_in_version — surfacing it required no new data sources.
+LOCKED: 2026-05-12
+
+## D049 — Homepage Wordmark Colors: Indigo + Rose (Supersedes D039)
+DECISION: DE_COLOR=#818CF8 (indigo), SK_COLOR=#F472B6 (rose/pink). Applied to wordmark, orbital, hero. Critical risk stat always uses #E63946 (red) regardless of brand colors.
+RATIONALE: Green+red (D039) felt generic. Indigo+rose is distinctive, works on dark backgrounds, feels premium. Critical risk stays red because it is a semantic color (danger), not a brand color.
+LOCKED: 2026-05-12
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.

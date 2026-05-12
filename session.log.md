@@ -3,6 +3,31 @@
 
 ---
 
+## Session: DESK — 2026-05-12 (evening) — ~3 hrs
+
+### What happened
+UI polish session driven by boss review. Recovered all P0+P1 changes from the morning session that were committed locally but never pushed to git (Vercel's GitHub integration re-deployed from origin, wiping the local deploy). Configured Pencil.dev as the global design tool standard with MCP server wired into ~/.claude/mcp.json. CVE panel rebuilt from scratch: version-aware risk driver banner with one-word verdict label (UPGRADE/CRITICAL/MONITOR/ABANDONED/STALE/RISING/EXPOSURE), patched/unpatched CVE split with red divider, SAFE VERSION breathing white badge above CVE list, 2-line CVE card showing fix version prominently on line 2. All 5 risk panel pills now colored. Leaderboard title bar redesigned: macOS dots removed, title text + sort buttons colored by mode (magenta/red), segmented pill toggle so both modes always visible. Homepage wordmark updated from green+red to indigo+rose, critical risk stat hardcoded red with scatter glow on all three stats.
+
+### Decisions made
+- D047: Pencil.dev is the global design tool for all projects with frontend UI. MCP server config in ~/.claude/mcp.json. Fallback: Figma if pricing changes post-early-access.
+- D048: CVE panel is version-aware — safe version computed as highest fixed_in_version across all CVEs (semver compare). Risk driver banner shows actionable upgrade path with one-word label chip. Patched/unpatched CVEs split with visual divider.
+- D049: Homepage wordmark colors indigo (#818CF8) + rose (#F472B6). Supersedes D039.
+
+### What failed and how it was resolved
+- Homepage overhaul attempt (aurora blobs + floating cards + navy bg) was reverted at Coach request — went too far without explicit instruction. Lesson: ask before redesigning a full page.
+- Settings.json rejected mcpServers key — MCP config belongs in ~/.claude/mcp.json, not settings.json. Fixed immediately.
+
+### Where we stopped
+Phase: Operate. All changes committed and deployed. Git clean (frontend).
+Last commit: f0b62821 — wordmark indigo+rose, critical risk always red.
+
+### Learnings for next D3O cycle
+- Never redesign a full page unprompted. Make targeted changes only unless explicitly asked for a full overhaul.
+- MCP server config lives in ~/.claude/mcp.json — not settings.json.
+- CVE panels need version context (what to upgrade to), not just counts. Data was already there — just not surfaced.
+
+---
+
 ## Session: DESK — 2026-05-10 — ~8 hrs
 
 ### What happened
@@ -26,6 +51,31 @@ Phase: Operate. Both pages live on production. Boss meeting pending.
 - Always check for CSS class overrides before debugging inline style failures
 - For bg color changes: two places only — `.react-flow__background` in index.css + `style` prop on ReactFlow component
 - `npx vercel --prod` from frontend/ is the deploy command, not git push
+
+---
+
+## Session: DESK — 2026-05-12 — ~3 hrs
+
+### What happened
+Boss feedback session. Analysed 5 categories of feedback, pushed back on 3 items (DESK branding, AI-generated summaries, alternative suggestions, frameworks/utilities filter — all rejected with reasons). Built and deployed two batches. Batch 1 (P0): quick-pick chips below search bar, leaderboard sort controls (Blast Radius / Risk Score toggle), trend arrows redesigned as labelled row (↑ Rising / ↓ Falling / → Stable), action banner replaced with data-driven `getPrimaryRiskDriver()` function. Batch 2 (P1 + polish): tooltips on all pills using `position: fixed` + `getBoundingClientRect()` (absolute was clipped by overflow containers), share/copy button with URL routing `?pkg=name`, "How is this scored?" modal with 4-factor breakdown, graph node re-center on click via `setCenter()`, visual polish on scroll hints and back button. Pipeline drift (02:07 UTC scheduled, running ~06:00 UTC) explained and accepted — no fix needed.
+
+### Decisions made
+- D043: Action banner is data-driven, not prescriptive. `getPrimaryRiskDriver()` reads CVEs, maintainer state, trend history, blast radius — returns one plain-English evidence sentence. Returns null if no signal — banner hidden.
+- D044: Tooltip implementation uses `position: fixed` + `getBoundingClientRect()`. `position: absolute` is clipped by `overflowY: auto` scroll containers in the explore view.
+- D045: URL routing added — `?pkg=name` written to URL on package load, read on mount. Enables shareable deep links.
+- D046: Pipeline schedule drift accepted. GitHub delays scheduled jobs on low-activity repos by 3-4 hours. Data still refreshes daily — exact hour irrelevant.
+
+### What failed and how it was resolved
+- Tooltips not visible after first deploy: `position: absolute` clipped by explore view's `overflowY: auto` scroll container. Fixed by switching to `position: fixed` with `getBoundingClientRect()`.
+
+### Where we stopped
+Phase: Operate. All boss feedback addressed. All P0 and P1 items shipped. No open work.
+
+### Learnings for next D3O cycle
+- Tooltip in scroll containers: always use `position: fixed` — `absolute` is clipped by overflow parents
+- `getPrimaryRiskDriver()` pattern: derive action from data, never prescribe without evidence
+- Graph re-center: `setCenter()` from `useReactFlow()` gives instant visual feedback before data loads
+- Prescriptive labels without evidence erode trust — data-driven labels always preferred
 
 ---
 
