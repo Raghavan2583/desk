@@ -152,23 +152,29 @@ function safeVersion(cves) {
 function CveRow({ cve }) {
   const color     = RISK_COLORS[cve.severity] ?? C.muted
   const isPatched = !!cve.fixed_in_version
+  const fixColor  = isPatched ? '#3FB950' : RISK_COLORS.CRITICAL
   return (
     <a href={cveLink(cve.osv_id)} target="_blank" rel="noreferrer"
-      style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:6, border:`1px solid ${color}22`, background:`${color}06`, textDecoration:'none', transition:'background 0.12s,border-color 0.12s' }}
+      style={{ display:'flex', flexDirection:'column', gap:5, padding:'9px 11px', borderRadius:7, border:`1px solid ${color}22`, background:`${color}06`, textDecoration:'none', transition:'background 0.12s,border-color 0.12s' }}
       onMouseEnter={e=>{ e.currentTarget.style.background=`${color}10`; e.currentTarget.style.borderColor=`${color}44` }}
       onMouseLeave={e=>{ e.currentTarget.style.background=`${color}06`; e.currentTarget.style.borderColor=`${color}22` }}
     >
-      <span style={{ fontSize:9, fontWeight:700, color, background:`${color}22`, border:`1px solid ${color}44`, borderRadius:3, padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0, boxShadow:`0 0 5px 1px ${color}33` }}>
-        {cve.severity}
-      </span>
-      <span style={{ fontSize:10, color:C.border, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
-        {cve.osv_id}
-      </span>
-      <span style={{ fontSize:11, color:C.muted, whiteSpace:'nowrap', flexShrink:0 }}>{fmtDate(cve.published_at)}</span>
-      {isPatched
-        ? <span style={{ fontSize:11, fontWeight:700, color:'#3FB950', whiteSpace:'nowrap', flexShrink:0 }}>→ v{cve.fixed_in_version}</span>
-        : <span style={{ fontSize:10, fontWeight:700, color:RISK_COLORS.CRITICAL, whiteSpace:'nowrap', flexShrink:0, letterSpacing:'0.03em' }}>no fix yet</span>
-      }
+      {/* Line 1 — CVE ID + severity */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
+        <span style={{ fontSize:10, color:C.text, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>
+          {cve.osv_id}
+        </span>
+        <span style={{ fontSize:9, fontWeight:700, color, background:`${color}22`, border:`1px solid ${color}44`, borderRadius:3, padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0, boxShadow:`0 0 5px 1px ${color}33` }}>
+          {cve.severity}
+        </span>
+      </div>
+      {/* Line 2 — fix version (prominent) + date */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:fixColor, whiteSpace:'nowrap', letterSpacing:'0.01em' }}>
+          {isPatched ? `→ Fixed in v${cve.fixed_in_version}` : 'No fix available'}
+        </span>
+        <span style={{ fontSize:10, color:C.muted, whiteSpace:'nowrap', flexShrink:0 }}>{fmtDate(cve.published_at)}</span>
+      </div>
     </a>
   )
 }
