@@ -35,24 +35,30 @@ export function BrandName({ size = 13 }) {
 // ── Orbital ───────────────────────────────────────────────────────────────── //
 
 const RINGS = [
-  { r: 80,  speed: 18, color: DE_COLOR, nodes: 4, size: 6   },
-  { r: 134, speed: 34, color: SK_COLOR, nodes: 6, size: 4.5 },
-  { r: 192, speed: 55, color: DE_COLOR, nodes: 8, size: 3   },
+  { r: 80,  speed: 18, color: DE_COLOR, nodes: 4, size: 8   },
+  { r: 134, speed: 34, color: SK_COLOR, nodes: 6, size: 6   },
+  { r: 192, speed: 55, color: DE_COLOR, nodes: 8, size: 4.5 },
 ]
 
 function Orbital() {
   return (
     <>
       <style>{`
-        @keyframes d-orb { to { transform: rotate(360deg);  } }
-        @keyframes d-ctr { to { transform: rotate(-360deg); } }
-        @keyframes d-pls { 0%,100%{opacity:.2} 50%{opacity:.55} }
+        @keyframes d-orb  { to { transform: rotate(360deg);  } }
+        @keyframes d-ctr  { to { transform: rotate(-360deg); } }
+        @keyframes d-pls  { 0%,100%{opacity:.35} 50%{opacity:.75} }
+        @keyframes d-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
+        @keyframes aurora-a { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(70px,50px) scale(1.18)} 66%{transform:translate(-40px,25px) scale(0.88)} }
+        @keyframes aurora-b { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(-55px,-35px) scale(1.12)} 66%{transform:translate(35px,55px) scale(0.93)} }
+        @keyframes d-float-a { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-14px)} }
+        @keyframes d-float-b { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-20px)} }
+        @keyframes d-float-c { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-11px)} }
       `}</style>
       <div style={{ position:'absolute', top:'36%', left:'50%', transform:'translate(-50%,-50%)', width:430, height:430, pointerEvents:'none', zIndex:0 }}>
-        <div style={{ position:'absolute', inset:0, borderRadius:'50%', background:`radial-gradient(circle,${DE_COLOR}12 0%,${SK_COLOR}0a 42%,transparent 70%)`, animation:'d-pls 4.5s ease-in-out infinite' }}/>
+        <div style={{ position:'absolute', inset:0, borderRadius:'50%', background:`radial-gradient(circle,${DE_COLOR}2a 0%,${SK_COLOR}18 42%,transparent 70%)`, animation:'d-pls 4.5s ease-in-out infinite' }}/>
         {RINGS.map((ring, ri) => (
           <div key={ri}>
-            <div style={{ position:'absolute', top:'50%', left:'50%', width:ring.r*2, height:ring.r*2, marginTop:-ring.r, marginLeft:-ring.r, border:`1px solid ${ring.color}18`, borderRadius:'50%' }}/>
+            <div style={{ position:'absolute', top:'50%', left:'50%', width:ring.r*2, height:ring.r*2, marginTop:-ring.r, marginLeft:-ring.r, border:`1px solid ${ring.color}38`, borderRadius:'50%', boxShadow:`0 0 12px 1px ${ring.color}18` }}/>
             {Array.from({length:ring.nodes}).map((_,ni)=>{
               const dur=`${ring.speed}s`, dly=`${-(ni/ring.nodes)*ring.speed}s`
               return (
@@ -281,12 +287,15 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
       {/* ══════════════════════════════════════════
           HERO — sticky, zooms out on scroll
           ══════════════════════════════════════════ */}
-      <div style={{ height:'100vh', position:'sticky', top:0, overflow:'hidden', background:C.bg, zIndex:1 }}>
+      <div style={{ height:'100vh', position:'sticky', top:0, overflow:'hidden', background:'#070B14', zIndex:1 }}>
+
+        {/* Aurora atmosphere */}
+        <AuroraBg />
 
         {/* Orbital */}
         <Orbital />
 
-        {/* ── Content zone: fully centered column, scales out on scroll ── */}
+        {/* ── Content zone: pushed up to make room for floating cards ── */}
         <div ref={heroContentRef} style={{
           position:      'absolute',
           inset:          0,
@@ -295,13 +304,13 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           alignItems:    'center',
           justifyContent:'center',
           textAlign:     'center',
-          padding:       '0 48px',
+          padding:       '0 48px 260px',
           zIndex:         2,
           gap:            0,
           transformOrigin:'center center',
           willChange:    'transform, opacity',
         }}>
-          <Wordmark size={80} />
+          <Wordmark size={88} />
 
           <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14 }}>
             <BrandName size={13}/>
@@ -309,17 +318,20 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
             <span style={{ fontSize:12, color:C.muted, letterSpacing:'0.04em' }}>PyPI Ecosystem Intelligence</span>
           </div>
 
-          <h1 style={{ fontSize:64, fontWeight:900, lineHeight:1.1, letterSpacing:'-0.03em', color:C.text, margin:'28px 0 0', maxWidth:740 }}>
+          <h1 style={{ fontSize:74, fontWeight:900, lineHeight:1.08, letterSpacing:'-0.03em', color:C.text, margin:'28px 0 0', maxWidth:780 }}>
             Every dependency is a bet.{' '}
-            <span style={{ color:SK_COLOR, textShadow:`0 0 60px ${SK_GLOW}` }}>Know the odds.</span>
+            <span style={{ color:SK_COLOR, textShadow:`0 0 80px ${SK_GLOW}, 0 0 140px ${SK_GLOW}` }}>Know the odds.</span>
           </h1>
 
           <p style={{ fontSize:18, color:C.muted, lineHeight:1.65, maxWidth:480, margin:'20px 0 0' }}>
             Map the blast radius across 1,000 PyPI packages.<br/>See what breaks before it does.
           </p>
 
-          <div style={{ marginTop:28 }}>
-            <SearchBar packages={indexData} onSearch={onSearch}/>
+          {/* Search — gradient border wrapper */}
+          <div style={{ marginTop:32, position:'relative', borderRadius:13, padding:1, background:`linear-gradient(135deg, ${DE_COLOR}55, ${SK_COLOR}55, #8B5CF655)` }}>
+            <div style={{ borderRadius:12, overflow:'hidden' }}>
+              <SearchBar packages={indexData} onSearch={onSearch}/>
+            </div>
           </div>
 
           {quickPicks.length > 0 && (
@@ -336,13 +348,14 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           )}
 
           {loading && <div style={{ fontSize:12, color:C.muted, marginTop:10 }}>Loading…</div>}
-
-          <StatRow criticalCount={criticalCount} />
         </div>
 
+        {/* ── Floating stat cards at bottom ── */}
+        <FloatingCards criticalCount={criticalCount} />
+
         {/* ── Scroll hint ── */}
-        <div style={{ position:'absolute', bottom:28, left:0, right:0, display:'flex', justifyContent:'center', zIndex:3, pointerEvents:'none' }}>
-          <span style={{ fontSize:20, color:'#fff', animation:'d-bounce 2.2s ease-in-out infinite', textShadow:'0 0 8px #FF4444, 0 0 18px #FF444488, 0 0 36px #FF444433' }}>↓</span>
+        <div style={{ position:'absolute', bottom:22, left:0, right:0, display:'flex', justifyContent:'center', zIndex:5, pointerEvents:'none' }}>
+          <span style={{ fontSize:18, color:'#fff', animation:'d-bounce 2.2s ease-in-out infinite', textShadow:'0 0 8px #FF4444, 0 0 18px #FF444488, 0 0 36px #FF444433' }}>↓</span>
         </div>
       </div>
 
@@ -350,7 +363,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           LEADERBOARD — exact replica of reference
           dark navy bg + blue-purple ambient glow
           ══════════════════════════════════════════ */}
-      <div ref={leaderboardRef} style={{ position:'relative', zIndex:2, background:C.bg, padding:'72px 72px 88px', transform:leaderboardVisible?'translateY(0)':'translateY(60px)', opacity:leaderboardVisible?1:0, transition:'transform 0.85s cubic-bezier(0.16,1,0.3,1),opacity 0.7s ease' }}>
+      <div ref={leaderboardRef} style={{ position:'relative', zIndex:2, background:'#070B14', padding:'72px 72px 88px', transform:leaderboardVisible?'translateY(0)':'translateY(60px)', opacity:leaderboardVisible?1:0, transition:'transform 0.85s cubic-bezier(0.16,1,0.3,1),opacity 0.7s ease' }}>
 
         {/* Floating window */}
         <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', background:'#13131E', borderRadius:14, border:'1px solid rgba(255,255,255,0.09)', boxShadow:'0 36px 100px rgba(0,0,0,0.88), 0 0 0 3px #0D1117, 0 0 0 5px rgba(110,80,220,0.70), 0 0 20px 6px rgba(100,70,210,0.55), 0 0 50px 12px rgba(90,60,200,0.30), 0 0 100px 22px rgba(80,50,190,0.15), 0 0 200px 40px rgba(70,45,180,0.07)', overflow:'hidden' }}>
