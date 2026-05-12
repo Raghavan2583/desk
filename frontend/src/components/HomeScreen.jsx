@@ -4,10 +4,10 @@ import { RISK_COLORS, C } from '../utils/colors'
 
 const ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
-const DE_COLOR = '#3FB950'
-const SK_COLOR = '#E63946'
-const DE_GLOW  = '#3FB95099'
-const SK_GLOW  = '#E6394699'
+const DE_COLOR = '#22D3EE'
+const SK_COLOR = '#FB923C'
+const DE_GLOW  = '#22D3EE99'
+const SK_GLOW  = '#FB923C99'
 
 // ── Brand helpers ─────────────────────────────────────────────────────────── //
 
@@ -199,16 +199,18 @@ function Tile({ rank, node, onClick }) {
 
 function StatRow({ criticalCount }) {
   const items = [
-    { value: '1,000', label: 'packages tracked', color: C.text },
-    { value: criticalCount, label: 'critical risk', color: RISK_COLORS.CRITICAL },
-    { value: 'Daily', label: 'data refresh', color: DE_COLOR },
+    { value: '1,000', label: 'packages tracked', color: DE_COLOR },
+    { value: criticalCount, label: 'critical risk', color: SK_COLOR },
+    { value: 'Daily', label: 'data refresh', color: '#A78BFA' },
   ]
   return (
     <div style={{ display:'flex', alignItems:'center', gap:0, marginTop:20 }}>
       {items.map((item, i) => (
         <div key={i} style={{ display:'flex', alignItems:'center' }}>
-          <div style={{ display:'flex', alignItems:'baseline', gap:6, padding:'0 24px' }}>
-            <span style={{ fontSize:22, fontWeight:800, color:item.color, fontVariantNumeric:'tabular-nums' }}>{item.value}</span>
+          <div style={{ display:'flex', alignItems:'baseline', gap:6, padding:'0 24px', position:'relative' }}>
+            {/* scatter glow */}
+            <div style={{ position:'absolute', inset:'-8px -16px', borderRadius:12, background:`radial-gradient(ellipse 80% 70% at 50% 60%, ${item.color}22 0%, transparent 75%)`, pointerEvents:'none' }}/>
+            <span style={{ fontSize:22, fontWeight:800, color:item.color, fontVariantNumeric:'tabular-nums', textShadow:`0 0 18px ${item.color}99, 0 0 36px ${item.color}44` }}>{item.value}</span>
             <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>{item.label}</span>
           </div>
           {i < items.length - 1 && (
