@@ -367,8 +367,8 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
               </span>
             </div>
 
-            {/* Sort toggle */}
-            <div style={{ marginLeft:'auto', display:'flex', gap:6, flexShrink:0 }}>
+            {/* Sort toggle — segmented pill */}
+            <div style={{ marginLeft:'auto', display:'flex', flexShrink:0, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:3, gap:2 }}>
               {[
                 { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
                 { mode:'risk_score',   label:'Risk Score',   color:'#E63946' },
@@ -376,14 +376,12 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
                 const active = sortBy === mode
                 return (
                   <button key={mode} onClick={() => setSortBy(mode)}
-                    style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'inherit', cursor:'pointer', borderRadius:6, padding:'4px 12px', transition:'all 0.15s',
-                      color:      active ? color                  : `${color}55`,
-                      background: active ? `${color}18`           : 'transparent',
-                      border:     active ? `1px solid ${color}66` : `1px solid ${color}22`,
-                      boxShadow:  active ? `0 0 12px 2px ${color}33` : 'none',
+                    style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'inherit', cursor:'pointer', borderRadius:6, padding:'5px 14px', transition:'all 0.18s',
+                      color:      active ? color              : 'rgba(255,255,255,0.45)',
+                      background: active ? `${color}22`       : 'transparent',
+                      border:     active ? `1px solid ${color}55` : '1px solid transparent',
+                      boxShadow:  active ? `0 0 14px 3px ${color}44, inset 0 0 8px ${color}18` : 'none',
                     }}
-                    onMouseEnter={e=>{ if (!active) { e.currentTarget.style.color=`${color}99`; e.currentTarget.style.borderColor=`${color}44` }}}
-                    onMouseLeave={e=>{ if (!active) { e.currentTarget.style.color=`${color}55`; e.currentTarget.style.borderColor=`${color}22` }}}
                   >{label}</button>
                 )
               })}
