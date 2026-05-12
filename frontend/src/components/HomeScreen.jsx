@@ -359,7 +359,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 20px', background:'linear-gradient(90deg,#1A1A2E 0%,#16162A 100%)', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
             {/* Title + subtitle */}
             <div style={{ display:'flex', alignItems:'baseline', gap:10, minWidth:0 }}>
-              <span style={{ fontSize:13, fontWeight:700, color:sortBy==='blast_radius' ? '#FF2D9A' : '#00D4FF', letterSpacing:'0.04em', transition:'color 0.2s', textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : '0 0 18px #00D4FF66', whiteSpace:'nowrap' }}>
+              <span style={{ fontSize:13, fontWeight:700, color:sortBy==='blast_radius' ? '#FF2D9A' : '#E63946', letterSpacing:'0.04em', transition:'color 0.2s', textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : '0 0 18px #E6394666', whiteSpace:'nowrap' }}>
                 {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : 'Risk Score Leaderboard'}
               </span>
               <span style={{ fontSize:11, color:'rgba(160,140,255,0.55)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
@@ -371,7 +371,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
             <div style={{ marginLeft:'auto', display:'flex', gap:6, flexShrink:0 }}>
               {[
                 { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
-                { mode:'risk_score',   label:'Risk Score',   color:'#00D4FF' },
+                { mode:'risk_score',   label:'Risk Score',   color:'#E63946' },
               ].map(({ mode, label, color }) => {
                 const active = sortBy === mode
                 return (
