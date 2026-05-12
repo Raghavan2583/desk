@@ -48,13 +48,18 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
   const highCves     = cves.filter(c => c.severity === 'HIGH')
 
   if (criticalCves.length > 0) {
-    const unpatched = criticalCves.filter(c => !c.fixed_in_version)
-    if (unpatched.length > 0) {
-      const n = unpatched.length
-      return `${n} critical security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} with no patch released yet`
+    const sv       = safeVersion(cves)
+    const fixable  = cves.filter(c => c.fixed_in_version).length
+    const leftover = cves.length - fixable
+    if (sv && fixable > 0) {
+      return leftover > 0
+        ? `Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet`
+        : `Upgrade to v${sv} — fixes all ${cves.length} CVEs including ${criticalCves.length} critical`
     }
-    const n = criticalCves.length
-    return `${n} critical security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} — fixes are available, upgrade recommended`
+    const unpatchedCrit = criticalCves.filter(c => !c.fixed_in_version).length
+    return unpatchedCrit > 0
+      ? `${unpatchedCrit} critical ${unpatchedCrit === 1 ? 'vulnerability' : 'vulnerabilities'} — no patch released yet`
+      : `${criticalCves.length} critical ${criticalCves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — upgrade recommended`
   }
 
   if (maintainer?.activity_label === 'ABANDONED') {
@@ -73,10 +78,15 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
   }
 
   if (highCves.length > 0 || cves.length > 0) {
-    const n = cves.length
-    return highCves.length > 0
-      ? `${n} security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} detected — including ${highCves.length} high severity`
-      : `${n} security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} found in public CVE databases`
+    const sv       = safeVersion(cves)
+    const fixable  = cves.filter(c => c.fixed_in_version).length
+    const leftover = cves.length - fixable
+    if (sv && fixable > 0) {
+      return leftover > 0
+        ? `Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet`
+        : `Upgrade to v${sv} — fixes all ${cves.length} CVEs`
+    }
+    return `${cves.length} ${cves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — no patches available yet`
   }
 
   if (trend_direction === 'RISING' && trend_history.length >= 3) {
@@ -123,8 +133,25 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString('en-US', { month:'short', year:'numeric' })
 }
 
+function compareSemver(a, b) {
+  const pa = (a || '').split('.').map(Number)
+  const pb = (b || '').split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
+  }
+  return 0
+}
+
+function safeVersion(cves) {
+  return cves
+    .map(c => c.fixed_in_version)
+    .filter(Boolean)
+    .reduce((best, v) => (best === null || compareSemver(v, best) > 0) ? v : best, null)
+}
+
 function CveRow({ cve }) {
-  const color = RISK_COLORS[cve.severity] ?? C.muted
+  const color     = RISK_COLORS[cve.severity] ?? C.muted
+  const isPatched = !!cve.fixed_in_version
   return (
     <a href={cveLink(cve.osv_id)} target="_blank" rel="noreferrer"
       style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:6, border:`1px solid ${color}22`, background:`${color}06`, textDecoration:'none', transition:'background 0.12s,border-color 0.12s' }}
@@ -134,13 +161,14 @@ function CveRow({ cve }) {
       <span style={{ fontSize:9, fontWeight:700, color, background:`${color}22`, border:`1px solid ${color}44`, borderRadius:3, padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0, boxShadow:`0 0 5px 1px ${color}33` }}>
         {cve.severity}
       </span>
-      <span style={{ fontSize:11, color:C.muted, whiteSpace:'nowrap' }}>{fmtDate(cve.published_at)}</span>
-      {cve.fixed_in_version && (
-        <span style={{ fontSize:11, color:C.accent, whiteSpace:'nowrap', marginLeft:'auto' }}>✓ {cve.fixed_in_version}</span>
-      )}
-      <span style={{ fontSize:10, color:C.border, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110, marginLeft: cve.fixed_in_version ? 0 : 'auto' }}>
+      <span style={{ fontSize:10, color:C.border, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
         {cve.osv_id}
       </span>
+      <span style={{ fontSize:11, color:C.muted, whiteSpace:'nowrap', flexShrink:0 }}>{fmtDate(cve.published_at)}</span>
+      {isPatched
+        ? <span style={{ fontSize:11, fontWeight:700, color:'#3FB950', whiteSpace:'nowrap', flexShrink:0 }}>→ v{cve.fixed_in_version}</span>
+        : <span style={{ fontSize:10, fontWeight:700, color:RISK_COLORS.CRITICAL, whiteSpace:'nowrap', flexShrink:0, letterSpacing:'0.03em' }}>no fix yet</span>
+      }
     </a>
   )
 }
@@ -205,7 +233,10 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
     },
   ].filter(Boolean)
 
-  const sortedCves = [...cves].sort((a,b) => new Date(b.published_at) - new Date(a.published_at))
+  const sortedCves    = [...cves].sort((a,b) => new Date(b.published_at) - new Date(a.published_at))
+  const patchedCves   = sortedCves.filter(c =>  c.fixed_in_version)
+  const unpatchedCves = sortedCves.filter(c => !c.fixed_in_version)
+  const sv            = safeVersion(cves)
 
   return (
     <div style={{ padding:'20px 24px 32px', display:'flex', flexDirection:'column', gap:20 }}>
@@ -288,10 +319,36 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
       {/* ── Row 4: CVEs ── */}
       {sortedCves.length > 0 && (
         <div>
-          <SectionLabel>{sortedCves.length} {sortedCves.length===1?'Vulnerability':'Vulnerabilities'}</SectionLabel>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-            {sortedCves.map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
+          {/* Header: count + safe version callout */}
+          <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:10 }}>
+            <SectionLabel>{sortedCves.length} {sortedCves.length===1?'Vulnerability':'Vulnerabilities'}</SectionLabel>
+            {sv && patchedCves.length > 0 && (
+              <span style={{ fontSize:11, color:'#3FB950' }}>
+                safe on <span style={{ fontWeight:700 }}>v{sv}</span>+
+              </span>
+            )}
           </div>
+
+          {/* Patched CVEs */}
+          {patchedCves.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom: unpatchedCves.length > 0 ? 12 : 0 }}>
+              {patchedCves.map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
+            </div>
+          )}
+
+          {/* Unpatched divider + rows */}
+          {unpatchedCves.length > 0 && (
+            <>
+              <div style={{ display:'flex', alignItems:'center', gap:8, margin:'4px 0 8px' }}>
+                <span style={{ flex:1, height:1, background:`${RISK_COLORS.CRITICAL}22` }}/>
+                <span style={{ fontSize:9, fontWeight:700, color:RISK_COLORS.CRITICAL, textTransform:'uppercase', letterSpacing:'0.08em', flexShrink:0 }}>no patch released</span>
+                <span style={{ flex:1, height:1, background:`${RISK_COLORS.CRITICAL}22` }}/>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                {unpatchedCves.map(cve => <CveRow key={cve.osv_id} cve={cve} />)}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
