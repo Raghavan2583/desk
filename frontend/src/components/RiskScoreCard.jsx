@@ -254,13 +254,15 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
   return (
     <div style={{ padding:'20px 24px 32px', display:'flex', flexDirection:'column', gap:20 }}>
 
+      <style>{`@keyframes white-breathe{0%,100%{box-shadow:0 0 10px 2px rgba(255,255,255,0.10),0 0 24px 4px rgba(255,255,255,0.05)}50%{box-shadow:0 0 22px 7px rgba(255,255,255,0.22),0 0 44px 12px rgba(255,255,255,0.09)}}`}</style>
+
       {/* ── Risk driver ── */}
       {riskDriver && (
-        <div style={{ padding:'10px 16px', background:`${riskColor}0d`, border:`1px solid ${riskColor}28`, borderLeft:`3px solid ${riskColor}`, borderRadius:8, display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:9, fontWeight:800, color:riskColor, background:`${riskColor}28`, border:`1px solid ${riskColor}66`, borderRadius:4, padding:'3px 8px', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0, boxShadow:`0 0 8px 2px ${riskColor}44` }}>
+        <div style={{ padding:'11px 16px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.18)', borderRadius:9, display:'flex', alignItems:'center', gap:12, animation:'white-breathe 2.8s ease-in-out infinite' }}>
+          <span style={{ fontSize:9, fontWeight:800, color:'#fff', background:'rgba(255,255,255,0.14)', border:'1px solid rgba(255,255,255,0.30)', borderRadius:4, padding:'3px 8px', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0, boxShadow:'0 0 8px 2px rgba(255,255,255,0.18)' }}>
             {riskDriver.label}
           </span>
-          <span style={{ fontSize:13, fontWeight:600, color:riskColor, letterSpacing:'0.02em', lineHeight:1.4 }}>{riskDriver.text}</span>
+          <span style={{ fontSize:13, fontWeight:600, color:'#fff', letterSpacing:'0.02em', lineHeight:1.4 }}>{riskDriver.text}</span>
         </div>
       )}
 
@@ -335,14 +337,12 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
       {/* ── Row 4: CVEs ── */}
       {sortedCves.length > 0 && (
         <div>
-          <style>{`@keyframes safe-breathe{0%,100%{box-shadow:0 0 10px 2px #3FB95033,0 0 22px 4px #3FB95016}50%{box-shadow:0 0 20px 6px #3FB95066,0 0 40px 10px #3FB95030}}`}</style>
-
           {/* Breathing safe-version badge */}
           {sv && patchedCves.length > 0 && (
-            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', background:'#3FB95010', border:'1px solid #3FB95044', borderRadius:9, marginBottom:14, animation:'safe-breathe 2.8s ease-in-out infinite' }}>
-              <span style={{ fontSize:9, fontWeight:800, color:'#3FB950', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0 }}>SAFE VERSION</span>
-              <span style={{ fontSize:15, fontWeight:800, color:'#3FB950', letterSpacing:'0.02em' }}>v{sv}+</span>
-              <span style={{ fontSize:11, color:'rgba(63,185,80,0.65)', marginLeft:2 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.18)', borderRadius:9, marginBottom:14, animation:'white-breathe 2.8s ease-in-out infinite' }}>
+              <span style={{ fontSize:9, fontWeight:800, color:'#fff', background:'rgba(255,255,255,0.14)', border:'1px solid rgba(255,255,255,0.30)', borderRadius:4, padding:'3px 8px', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0, boxShadow:'0 0 8px 2px rgba(255,255,255,0.18)' }}>SAFE VERSION</span>
+              <span style={{ fontSize:15, fontWeight:800, color:'#fff', letterSpacing:'0.02em' }}>v{sv}+</span>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginLeft:2 }}>
                 {patchedCves.length === sortedCves.length
                   ? `fixes all ${sortedCves.length} CVEs`
                   : `fixes ${patchedCves.length} of ${sortedCves.length} CVEs`}
