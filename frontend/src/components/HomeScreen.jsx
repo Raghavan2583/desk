@@ -4,10 +4,10 @@ import { RISK_COLORS, C } from '../utils/colors'
 
 const ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
-const DE_COLOR = '#22D3EE'
-const SK_COLOR = '#FB923C'
-const DE_GLOW  = '#22D3EE99'
-const SK_GLOW  = '#FB923C99'
+const DE_COLOR = '#818CF8'
+const SK_COLOR = '#F472B6'
+const DE_GLOW  = '#818CF899'
+const SK_GLOW  = '#F472B699'
 
 // ── Brand helpers ─────────────────────────────────────────────────────────── //
 
@@ -200,7 +200,7 @@ function Tile({ rank, node, onClick }) {
 function StatRow({ criticalCount }) {
   const items = [
     { value: '1,000', label: 'packages tracked', color: DE_COLOR },
-    { value: criticalCount, label: 'critical risk', color: SK_COLOR },
+    { value: criticalCount, label: 'critical risk', color: '#E63946' },
     { value: 'Daily', label: 'data refresh', color: '#A78BFA' },
   ]
   return (
