@@ -53,13 +53,13 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
     const leftover = cves.length - fixable
     if (sv && fixable > 0) {
       return leftover > 0
-        ? `Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet`
-        : `Upgrade to v${sv} — fixes all ${cves.length} CVEs including ${criticalCves.length} critical`
+        ? { label:'UPGRADE', text:`Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet` }
+        : { label:'UPGRADE', text:`Upgrade to v${sv} — fixes all ${cves.length} CVEs including ${criticalCves.length} critical` }
     }
     const unpatchedCrit = criticalCves.filter(c => !c.fixed_in_version).length
     return unpatchedCrit > 0
-      ? `${unpatchedCrit} critical ${unpatchedCrit === 1 ? 'vulnerability' : 'vulnerabilities'} — no patch released yet`
-      : `${criticalCves.length} critical ${criticalCves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — upgrade recommended`
+      ? { label:'CRITICAL', text:`${unpatchedCrit} critical ${unpatchedCrit === 1 ? 'vulnerability' : 'vulnerabilities'} — no patch released yet` }
+      : { label:'CRITICAL', text:`${criticalCves.length} critical ${criticalCves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — upgrade recommended` }
   }
 
   if (maintainer?.activity_label === 'ABANDONED') {
@@ -67,14 +67,16 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
       const years  = Math.floor(maintainer.days_since_last_commit / 365)
       const months = Math.floor((maintainer.days_since_last_commit % 365) / 30)
       const time   = years >= 1 ? `${years}+ year${years > 1 ? 's' : ''}` : `${months}+ months`
-      return `No code updates in ${time} — this package may no longer be maintained`
+      return { label:'ABANDONED', text:`No code updates in ${time} — this package may no longer be maintained` }
     }
-    return 'No active maintainer detected — this package may no longer be maintained'
+    return { label:'ABANDONED', text:'No active maintainer detected — this package may no longer be maintained' }
   }
 
   if (maintainer?.activity_label === 'STALE' && (risk_label === 'CRITICAL' || risk_label === 'HIGH')) {
     const months = maintainer.days_since_last_commit ? Math.floor(maintainer.days_since_last_commit / 30) : null
-    return months ? `No code updates in ${months}+ months — development has stalled` : 'Development has stalled'
+    return months
+      ? { label:'STALE', text:`No code updates in ${months}+ months — development has stalled` }
+      : { label:'STALE', text:'Development has stalled' }
   }
 
   if (highCves.length > 0 || cves.length > 0) {
@@ -83,10 +85,10 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
     const leftover = cves.length - fixable
     if (sv && fixable > 0) {
       return leftover > 0
-        ? `Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet`
-        : `Upgrade to v${sv} — fixes all ${cves.length} CVEs`
+        ? { label:'UPGRADE', text:`Upgrade to v${sv} — fixes ${fixable} of ${cves.length} CVEs · ${leftover} have no patch yet` }
+        : { label:'UPGRADE', text:`Upgrade to v${sv} — fixes all ${cves.length} CVEs` }
     }
-    return `${cves.length} ${cves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — no patches available yet`
+    return { label:'MONITOR', text:`${cves.length} ${cves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — no patches available yet` }
   }
 
   if (trend_direction === 'RISING' && trend_history.length >= 3) {
@@ -94,12 +96,12 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
     const newest = trend_history[trend_history.length - 1]?.risk_score
     if (oldest != null && newest != null && newest > oldest) {
       const delta = (newest - oldest).toFixed(1)
-      return `Risk score has climbed ${delta} points over the past ${trend_history.length} months`
+      return { label:'RISING', text:`Risk score has climbed ${delta} points over the past ${trend_history.length} months` }
     }
   }
 
   if (blast_radius_count > 1000 && (risk_label === 'CRITICAL' || risk_label === 'HIGH')) {
-    return `${blast_radius_count.toLocaleString()} packages depend on this — a security issue here would spread widely`
+    return { label:'EXPOSURE', text:`${blast_radius_count.toLocaleString()} packages depend on this — a security issue here would spread widely` }
   }
 
   return null
@@ -224,9 +226,14 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
   const trendArrow = TREND_ARROW[trend_direction] ?? '→'
   const riskDriver = getPrimaryRiskDriver({ cves, maintainer, trend_direction, trend_history, blast_radius_count, risk_label })
 
+  const commitColor = maintainer?.days_since_last_commit == null ? C.muted
+    : maintainer.days_since_last_commit < 30  ? '#3FB950'
+    : maintainer.days_since_last_commit < 365 ? '#FFD700'
+    : RISK_COLORS.HIGH
+
   const pills = [
-    blast_radius_count > 0 && { text:`${blast_radius_count.toLocaleString()} downstream`, color:null, tooltip:`${blast_radius_count.toLocaleString()} other packages depend on this one. If it fails or is compromised, all of them are potentially affected.` },
-    direct_dependencies.length > 0 && { text:`${direct_dependencies.length} deps`, color:null, tooltip:`This package relies on ${direct_dependencies.length} other librar${direct_dependencies.length===1?'y':'ies'} to function.` },
+    blast_radius_count > 0 && { text:`${blast_radius_count.toLocaleString()} downstream`, color:'#FF2D9A', tooltip:`${blast_radius_count.toLocaleString()} other packages depend on this one. If it fails or is compromised, all of them are potentially affected.` },
+    direct_dependencies.length > 0 && { text:`${direct_dependencies.length} deps`, color:'#00D4FF', tooltip:`This package relies on ${direct_dependencies.length} other librar${direct_dependencies.length===1?'y':'ies'} to function.` },
     cves.length > 0 && { text:`${cves.length} CVEs`, color:RISK_COLORS.MEDIUM, tooltip:`${cves.length} Common Vulnerabilit${cves.length===1?'y':'ies'} and Exposure${cves.length===1?'':'s'} — publicly known security flaws found in this package.` },
     maintainer?.activity_label && { text:maintainer.activity_label, color:ACTIVITY_COLORS[maintainer.activity_label]??C.muted, tooltip:'How actively this package is being maintained. ABANDONED means no code updates in 2+ years.' },
     maintainer?.days_since_last_commit != null && {
@@ -234,7 +241,7 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
           : maintainer.days_since_last_commit < 30   ? `${maintainer.days_since_last_commit}d ago`
           : maintainer.days_since_last_commit < 365  ? `${Math.round(maintainer.days_since_last_commit/30)}mo ago`
           : `${Math.round(maintainer.days_since_last_commit/365)}y ago`,
-      color:null,
+      color: commitColor,
       tooltip:'Time since the maintainer last published a code update.',
     },
   ].filter(Boolean)
@@ -249,8 +256,11 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
 
       {/* ── Risk driver ── */}
       {riskDriver && (
-        <div style={{ padding:'10px 16px', background:`${riskColor}0d`, border:`1px solid ${riskColor}28`, borderLeft:`3px solid ${riskColor}`, borderRadius:8, display:'flex', alignItems:'center' }}>
-          <span style={{ fontSize:13, fontWeight:600, color:riskColor, letterSpacing:'0.02em', lineHeight:1.4 }}>{riskDriver}</span>
+        <div style={{ padding:'10px 16px', background:`${riskColor}0d`, border:`1px solid ${riskColor}28`, borderLeft:`3px solid ${riskColor}`, borderRadius:8, display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:9, fontWeight:800, color:riskColor, background:`${riskColor}28`, border:`1px solid ${riskColor}66`, borderRadius:4, padding:'3px 8px', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0, boxShadow:`0 0 8px 2px ${riskColor}44` }}>
+            {riskDriver.label}
+          </span>
+          <span style={{ fontSize:13, fontWeight:600, color:riskColor, letterSpacing:'0.02em', lineHeight:1.4 }}>{riskDriver.text}</span>
         </div>
       )}
 
@@ -325,14 +335,24 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
       {/* ── Row 4: CVEs ── */}
       {sortedCves.length > 0 && (
         <div>
-          {/* Header: count + safe version callout */}
-          <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:10 }}>
-            <SectionLabel>{sortedCves.length} {sortedCves.length===1?'Vulnerability':'Vulnerabilities'}</SectionLabel>
-            {sv && patchedCves.length > 0 && (
-              <span style={{ fontSize:11, color:'#3FB950' }}>
-                safe on <span style={{ fontWeight:700 }}>v{sv}</span>+
+          <style>{`@keyframes safe-breathe{0%,100%{box-shadow:0 0 10px 2px #3FB95033,0 0 22px 4px #3FB95016}50%{box-shadow:0 0 20px 6px #3FB95066,0 0 40px 10px #3FB95030}}`}</style>
+
+          {/* Breathing safe-version badge */}
+          {sv && patchedCves.length > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', background:'#3FB95010', border:'1px solid #3FB95044', borderRadius:9, marginBottom:14, animation:'safe-breathe 2.8s ease-in-out infinite' }}>
+              <span style={{ fontSize:9, fontWeight:800, color:'#3FB950', textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0 }}>SAFE VERSION</span>
+              <span style={{ fontSize:15, fontWeight:800, color:'#3FB950', letterSpacing:'0.02em' }}>v{sv}+</span>
+              <span style={{ fontSize:11, color:'rgba(63,185,80,0.65)', marginLeft:2 }}>
+                {patchedCves.length === sortedCves.length
+                  ? `fixes all ${sortedCves.length} CVEs`
+                  : `fixes ${patchedCves.length} of ${sortedCves.length} CVEs`}
               </span>
-            )}
+            </div>
+          )}
+
+          {/* Section label */}
+          <div style={{ marginBottom:10 }}>
+            <SectionLabel>{sortedCves.length} {sortedCves.length===1?'Vulnerability':'Vulnerabilities'}</SectionLabel>
           </div>
 
           {/* Patched CVEs */}
