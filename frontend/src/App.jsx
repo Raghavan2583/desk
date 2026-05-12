@@ -14,6 +14,7 @@ export default function App() {
   const [expandedPackages, setExpandedPackages] = useState(new Set())
   const [loading,          setLoading]          = useState(false)
   const [history,          setHistory]          = useState([])
+  const [copied,           setCopied]           = useState(false)
 
   const graphCache    = useRef(null)
   const graphContentRef = useRef(null)
@@ -24,7 +25,18 @@ export default function App() {
       .then(d => setIndexData(d.packages ?? []))
       .catch(err => console.error('index.json load failed:', err))
     loadGraph().then(g => setGraphData(g)).catch(() => {})
-  }, [])
+
+    const pkg = new URLSearchParams(window.location.search).get('pkg')
+    if (pkg) handleSearch(pkg)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (focusedPackage) {
+      window.history.replaceState(null, '', `?pkg=${encodeURIComponent(focusedPackage)}`)
+    } else {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [focusedPackage])
 
   async function loadGraph() {
     if (graphCache.current) return graphCache.current
@@ -94,6 +106,12 @@ export default function App() {
     handleSearch(packageName)
   }, [handleSearch])
 
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   // Scroll handler — graph zooms out as risk panel rises (same mechanic as home page)
   function handleExploreScroll(e) {
     const p = Math.min(e.currentTarget.scrollTop / (window.innerHeight * 0.65), 1)
@@ -136,7 +154,11 @@ export default function App() {
           )}
 
           {history.length > 0 && (
-            <button onClick={handleBack} style={{ background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:C.muted, cursor:'pointer', fontSize:12, padding:'5px 12px', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+            <button onClick={handleBack}
+              style={{ background:'rgba(0,212,255,0.08)', border:'1px solid rgba(0,212,255,0.55)', borderRadius:6, color:'#00D4FF', cursor:'pointer', fontSize:12, fontWeight:700, padding:'5px 14px', fontFamily:'inherit', whiteSpace:'nowrap', boxShadow:'0 0 10px rgba(0,212,255,0.28), 0 0 22px rgba(0,212,255,0.12)', transition:'all 0.15s' }}
+              onMouseEnter={e=>{ e.currentTarget.style.background='rgba(0,212,255,0.16)'; e.currentTarget.style.borderColor='rgba(0,212,255,0.85)'; e.currentTarget.style.boxShadow='0 0 16px rgba(0,212,255,0.5), 0 0 36px rgba(0,212,255,0.22)' }}
+              onMouseLeave={e=>{ e.currentTarget.style.background='rgba(0,212,255,0.08)'; e.currentTarget.style.borderColor='rgba(0,212,255,0.55)'; e.currentTarget.style.boxShadow='0 0 10px rgba(0,212,255,0.28), 0 0 22px rgba(0,212,255,0.12)' }}
+            >
               ← Back
             </button>
           )}
@@ -144,6 +166,10 @@ export default function App() {
           <div style={{ flex:1, maxWidth:300, marginLeft:'auto' }}>
             <SearchBar packages={indexData} onSearch={handleSearch} compact />
           </div>
+
+          <button onClick={handleCopyLink} style={{ flexShrink:0, fontSize:12, fontWeight:600, color: copied ? C.accent : C.muted, background: copied ? `${C.accent}14` : 'rgba(255,255,255,0.04)', border:`1px solid ${copied ? `${C.accent}44` : 'rgba(255,255,255,0.1)'}`, borderRadius:6, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s', whiteSpace:'nowrap' }}>
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
 
           {loading && <span style={{ fontSize:12, color:C.muted, flexShrink:0 }}>Loading…</span>}
         </div>
@@ -179,9 +205,9 @@ export default function App() {
             </div>
 
             {/* Scroll hint */}
-            <div style={{ position:'absolute', bottom:24, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6, zIndex:3, pointerEvents:'none' }}>
-              <span style={{ fontSize:11, color:'rgba(255,255,255,0.22)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Scroll for risk analysis</span>
-              <span style={{ fontSize:18, color:'rgba(255,255,255,0.18)', animation:'d-bounce 2.2s ease-in-out infinite' }}>↓</span>
+            <div style={{ position:'absolute', bottom:64, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6, zIndex:3, pointerEvents:'none' }}>
+              <span style={{ fontSize:11, color:'#fff', letterSpacing:'0.08em', textTransform:'uppercase', textShadow:'0 0 6px #FF4444, 0 0 14px #FF444488, 0 0 28px #FF444444, -2px 0 8px #FF444455, 2px 0 8px #FF444455' }}>Scroll for risk analysis</span>
+              <span style={{ fontSize:18, color:'#fff', animation:'d-bounce 2.2s ease-in-out infinite', textShadow:'0 0 8px #FF4444, 0 0 18px #FF444488, 0 0 36px #FF444433' }}>↓</span>
             </div>
           </div>
 

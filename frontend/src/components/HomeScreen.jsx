@@ -181,9 +181,16 @@ function Tile({ rank, node, onClick }) {
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
         <span style={{ fontSize:9, fontWeight:700, color:rc, background:`${rc}22`, border:`1px solid ${rc}55`, borderRadius:3, padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.04em' }}>{risk_label}</span>
         <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{risk_score}</span>
-        <span style={{ fontSize:11, fontWeight:700, color:tc, marginLeft:2 }}>{trnd}</span>
       </div>
-      <div style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</div>
+        <div style={{ display:'flex', alignItems:'center', gap:3 }}>
+          <span style={{ fontSize:13, fontWeight:700, color:tc }}>{trnd}</span>
+          <span style={{ fontSize:9, fontWeight:700, color:tc, letterSpacing:'0.04em', textTransform:'uppercase' }}>
+            {trend_direction==='RISING'?'Rising':trend_direction==='FALLING'?'Falling':'Stable'}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -220,6 +227,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
   const leaderboardRef  = useRef(null)
   const heroContentRef  = useRef(null)
   const [leaderboardVisible, setLeaderboardVisible] = useState(false)
+  const [sortBy,            setSortBy]            = useState('blast_radius')
 
   function handleScroll(e) {
     const p = Math.min(e.currentTarget.scrollTop / (window.innerHeight * 0.65), 1)
@@ -245,8 +253,21 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
     if (!graphData?.nodes) return []
     return [...graphData.nodes]
       .filter(n => (n.data?.blast_radius_count ?? 0) > 0)
-      .sort((a, b) => (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0))
+      .sort((a, b) =>
+        sortBy === 'risk_score'
+          ? (b.data.risk_score ?? 0) - (a.data.risk_score ?? 0)
+          : (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0)
+      )
       .slice(0, 20)
+  }, [graphData, sortBy])
+
+  const quickPicks = useMemo(() => {
+    if (!graphData?.nodes) return []
+    return [...graphData.nodes]
+      .filter(n => n.data?.risk_label === 'CRITICAL')
+      .sort((a, b) => (b.data.risk_score ?? 0) - (a.data.risk_score ?? 0))
+      .slice(0, 4)
+      .map(n => n.data.package_name)
   }, [graphData])
 
   const criticalCount = useMemo(() => {
@@ -301,6 +322,19 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
             <SearchBar packages={indexData} onSearch={onSearch}/>
           </div>
 
+          {quickPicks.length > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14 }}>
+              <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.04em', flexShrink:0 }}>Try:</span>
+              {quickPicks.map(name => (
+                <button key={name} onClick={() => onSearch(name)}
+                  style={{ fontSize:12, color:RISK_COLORS.CRITICAL, background:`${RISK_COLORS.CRITICAL}14`, border:`1px solid ${RISK_COLORS.CRITICAL}33`, borderRadius:6, padding:'4px 12px', cursor:'pointer', fontFamily:'inherit', fontWeight:600, transition:'background 0.12s,border-color 0.12s' }}
+                  onMouseEnter={e=>{ e.currentTarget.style.background=`${RISK_COLORS.CRITICAL}28`; e.currentTarget.style.borderColor=`${RISK_COLORS.CRITICAL}66` }}
+                  onMouseLeave={e=>{ e.currentTarget.style.background=`${RISK_COLORS.CRITICAL}14`; e.currentTarget.style.borderColor=`${RISK_COLORS.CRITICAL}33` }}
+                >{name}</button>
+              ))}
+            </div>
+          )}
+
           {loading && <div style={{ fontSize:12, color:C.muted, marginTop:10 }}>Loading…</div>}
 
           <StatRow criticalCount={criticalCount} />
@@ -308,7 +342,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
 
         {/* ── Scroll hint ── */}
         <div style={{ position:'absolute', bottom:28, left:0, right:0, display:'flex', justifyContent:'center', zIndex:3, pointerEvents:'none' }}>
-          <span style={{ fontSize:20, color:C.muted, animation:'d-bounce 2.2s ease-in-out infinite' }}>↓</span>
+          <span style={{ fontSize:20, color:'#fff', animation:'d-bounce 2.2s ease-in-out infinite', textShadow:'0 0 8px #FF4444, 0 0 18px #FF444488, 0 0 36px #FF444433' }}>↓</span>
         </div>
       </div>
 
@@ -326,8 +360,19 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
             <span style={{ width:12, height:12, borderRadius:'50%', background:'#FF5F56', display:'inline-block', flexShrink:0 }}/>
             <span style={{ width:12, height:12, borderRadius:'50%', background:'#FFBD2E', display:'inline-block', flexShrink:0 }}/>
             <span style={{ width:12, height:12, borderRadius:'50%', background:'#27C93F', display:'inline-block', flexShrink:0 }}/>
-            <span style={{ marginLeft:14, fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.4)', letterSpacing:'0.04em' }}>Blast Radius Leaderboard</span>
-            <span style={{ fontSize:11, color:'rgba(255,255,255,0.2)' }}>— packages that break the most if they fail</span>
+            <span style={{ marginLeft:14, fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.4)', letterSpacing:'0.04em' }}>
+              {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : 'Risk Score Leaderboard'}
+            </span>
+            <span style={{ fontSize:11, color:'rgba(255,255,255,0.2)' }}>
+              {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : '— packages with the highest risk scores'}
+            </span>
+            <div style={{ marginLeft:'auto', display:'flex', gap:4 }}>
+              {[['blast_radius','Blast Radius'],['risk_score','Risk Score']].map(([mode, label]) => (
+                <button key={mode} onClick={() => setSortBy(mode)}
+                  style={{ fontSize:10, fontWeight:700, color: sortBy===mode ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)', background: sortBy===mode ? 'rgba(255,255,255,0.1)' : 'transparent', border:`1px solid ${sortBy===mode ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit', letterSpacing:'0.04em', textTransform:'uppercase', transition:'all 0.12s' }}
+                >{label}</button>
+              ))}
+            </div>
           </div>
 
           {/* Content */}

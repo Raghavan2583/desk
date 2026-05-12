@@ -1,7 +1,99 @@
+import { useState } from 'react'
 import MaintainerCard from './MaintainerCard'
+import Tooltip from './Tooltip'
 import { RISK_COLORS, TREND_COLORS, ACTIVITY_COLORS, C } from '../utils/colors'
 
 const TREND_ARROW = { RISING: '↑', FALLING: '↓', STABLE: '→' }
+
+const SCORE_FACTORS = [
+  { label:'Vulnerabilities',   weight:'50%', color:RISK_COLORS.CRITICAL, desc:'Known security flaws (CVEs) weighted by severity. Unpatched critical CVEs carry the most weight. A single unpatched critical CVE can push a package to CRITICAL risk.' },
+  { label:'Maintainer Health', weight:'20%', color:RISK_COLORS.HIGH,     desc:'How recently the maintainer has released code updates. Packages with no commits in 2+ years are treated as potentially abandoned and score highest risk.' },
+  { label:'Blast Radius',      weight:'20%', color:'#00D4FF',            desc:'How many other packages depend on this one. A widely-used package that goes bad affects a much larger part of the ecosystem.' },
+  { label:'Trend',             weight:'10%', color:RISK_COLORS.LOW,      desc:'Whether the risk score has been rising, falling, or holding steady over the past 12 months. A consistently rising score signals a package that is getting harder to trust.' },
+]
+
+function ScoreModal({ onClose }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', zIndex:9998, backdropFilter:'blur(3px)' }}/>
+      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:'#13131E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'28px 32px', width:440, boxShadow:'0 24px 64px rgba(0,0,0,0.8)' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <span style={{ fontSize:15, fontWeight:700, color:C.text }}>How DESK calculates risk</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, lineHeight:1, padding:0, fontFamily:'inherit' }}>×</button>
+        </div>
+        <p style={{ fontSize:12, color:C.muted, lineHeight:1.65, marginBottom:22, margin:'0 0 22px' }}>
+          Each package gets a score from 0–10. Four factors contribute, each weighted by how much it actually predicts real-world risk.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          {SCORE_FACTORS.map(f => (
+            <div key={f.label} style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
+              <div style={{ flexShrink:0, width:8, height:8, borderRadius:'50%', background:f.color, marginTop:4, boxShadow:`0 0 6px 2px ${f.color}88` }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:4 }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{f.label}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:f.color }}>{f.weight}</span>
+                </div>
+                <p style={{ fontSize:11, color:C.muted, lineHeight:1.6, margin:0 }}>{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_history = [], blast_radius_count, risk_label }) {
+  const criticalCves = cves.filter(c => c.severity === 'CRITICAL')
+  const highCves     = cves.filter(c => c.severity === 'HIGH')
+
+  if (criticalCves.length > 0) {
+    const unpatched = criticalCves.filter(c => !c.fixed_in_version)
+    if (unpatched.length > 0) {
+      const n = unpatched.length
+      return `${n} critical security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} with no patch released yet`
+    }
+    const n = criticalCves.length
+    return `${n} critical security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} — fixes are available, upgrade recommended`
+  }
+
+  if (maintainer?.activity_label === 'ABANDONED') {
+    if (maintainer.days_since_last_commit) {
+      const years  = Math.floor(maintainer.days_since_last_commit / 365)
+      const months = Math.floor((maintainer.days_since_last_commit % 365) / 30)
+      const time   = years >= 1 ? `${years}+ year${years > 1 ? 's' : ''}` : `${months}+ months`
+      return `No code updates in ${time} — this package may no longer be maintained`
+    }
+    return 'No active maintainer detected — this package may no longer be maintained'
+  }
+
+  if (maintainer?.activity_label === 'STALE' && (risk_label === 'CRITICAL' || risk_label === 'HIGH')) {
+    const months = maintainer.days_since_last_commit ? Math.floor(maintainer.days_since_last_commit / 30) : null
+    return months ? `No code updates in ${months}+ months — development has stalled` : 'Development has stalled'
+  }
+
+  if (highCves.length > 0 || cves.length > 0) {
+    const n = cves.length
+    return highCves.length > 0
+      ? `${n} security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} detected — including ${highCves.length} high severity`
+      : `${n} security ${n === 1 ? 'vulnerability' : 'vulnerabilities'} found in public CVE databases`
+  }
+
+  if (trend_direction === 'RISING' && trend_history.length >= 3) {
+    const oldest = trend_history[0]?.risk_score
+    const newest = trend_history[trend_history.length - 1]?.risk_score
+    if (oldest != null && newest != null && newest > oldest) {
+      const delta = (newest - oldest).toFixed(1)
+      return `Risk score has climbed ${delta} points over the past ${trend_history.length} months`
+    }
+  }
+
+  if (blast_radius_count > 1000 && (risk_label === 'CRITICAL' || risk_label === 'HIGH')) {
+    return `${blast_radius_count.toLocaleString()} packages depend on this — a security issue here would spread widely`
+  }
+
+  return null
+}
 
 function Sparkline({ history, color }) {
   if (!history || history.length < 2) return null
@@ -92,21 +184,24 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
     direct_dependents = [],
   } = packageData
 
+  const [showModal, setShowModal] = useState(false)
   const riskColor  = RISK_COLORS[risk_label] ?? C.muted
   const trendColor = TREND_COLORS[trend_direction] ?? C.muted
   const trendArrow = TREND_ARROW[trend_direction] ?? '→'
+  const riskDriver = getPrimaryRiskDriver({ cves, maintainer, trend_direction, trend_history, blast_radius_count, risk_label })
 
   const pills = [
-    blast_radius_count > 0 && { text:`${blast_radius_count.toLocaleString()} downstream`, color:null },
-    direct_dependencies.length > 0 && { text:`${direct_dependencies.length} deps`, color:null },
-    cves.length > 0 && { text:`${cves.length} CVEs`, color:RISK_COLORS.MEDIUM },
-    maintainer?.activity_label && { text:maintainer.activity_label, color:ACTIVITY_COLORS[maintainer.activity_label]??C.muted },
+    blast_radius_count > 0 && { text:`${blast_radius_count.toLocaleString()} downstream`, color:null, tooltip:`${blast_radius_count.toLocaleString()} other packages depend on this one. If it fails or is compromised, all of them are potentially affected.` },
+    direct_dependencies.length > 0 && { text:`${direct_dependencies.length} deps`, color:null, tooltip:`This package relies on ${direct_dependencies.length} other librar${direct_dependencies.length===1?'y':'ies'} to function.` },
+    cves.length > 0 && { text:`${cves.length} CVEs`, color:RISK_COLORS.MEDIUM, tooltip:`${cves.length} Common Vulnerabilit${cves.length===1?'y':'ies'} and Exposure${cves.length===1?'':'s'} — publicly known security flaws found in this package.` },
+    maintainer?.activity_label && { text:maintainer.activity_label, color:ACTIVITY_COLORS[maintainer.activity_label]??C.muted, tooltip:'How actively this package is being maintained. ABANDONED means no code updates in 2+ years.' },
     maintainer?.days_since_last_commit != null && {
       text: maintainer.days_since_last_commit < 1    ? 'commit today'
           : maintainer.days_since_last_commit < 30   ? `${maintainer.days_since_last_commit}d ago`
           : maintainer.days_since_last_commit < 365  ? `${Math.round(maintainer.days_since_last_commit/30)}mo ago`
           : `${Math.round(maintainer.days_since_last_commit/365)}y ago`,
       color:null,
+      tooltip:'Time since the maintainer last published a code update.',
     },
   ].filter(Boolean)
 
@@ -114,6 +209,13 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
 
   return (
     <div style={{ padding:'20px 24px 32px', display:'flex', flexDirection:'column', gap:20 }}>
+
+      {/* ── Risk driver ── */}
+      {riskDriver && (
+        <div style={{ padding:'10px 16px', background:`${riskColor}0d`, border:`1px solid ${riskColor}28`, borderLeft:`3px solid ${riskColor}`, borderRadius:8, display:'flex', alignItems:'center' }}>
+          <span style={{ fontSize:13, fontWeight:600, color:riskColor, letterSpacing:'0.02em', lineHeight:1.4 }}>{riskDriver}</span>
+        </div>
+      )}
 
       {/* ── Row 1: 3-column header — fills entire width ── */}
       <div style={{ display:'flex', alignItems:'stretch', gap:16 }}>
@@ -131,9 +233,11 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
           {summary && <div style={{ fontSize:13, color:C.muted, lineHeight:1.5, marginBottom:10 }}>{summary}</div>}
           <div style={{ display:'flex', flexWrap:'wrap', gap:5, alignItems:'center' }}>
             {pills.map((pill, i) => (
-              <span key={i} style={{ fontSize:11, color:pill.color??C.muted, fontWeight:pill.color?700:400, background:pill.color?`${pill.color}18`:'rgba(255,255,255,0.05)', border:pill.color?`1px solid ${pill.color}33`:'1px solid rgba(255,255,255,0.07)', borderRadius:4, padding:'2px 8px' }}>
-                {pill.text}
-              </span>
+              <Tooltip key={i} text={pill.tooltip}>
+                <span style={{ fontSize:11, color:pill.color??C.muted, fontWeight:pill.color?700:400, background:pill.color?`${pill.color}18`:'rgba(255,255,255,0.05)', border:pill.color?`1px solid ${pill.color}33`:'1px solid rgba(255,255,255,0.07)', borderRadius:4, padding:'2px 8px', cursor:'default' }}>
+                  {pill.text}
+                </span>
+              </Tooltip>
             ))}
           </div>
         </div>
@@ -155,8 +259,13 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
             <span style={{ fontSize:11, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} depend</span>
           </div>
           <Sparkline history={trend_history} color={riskColor} />
+          <button onClick={() => setShowModal(true)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:10, padding:'6px 0 0', textAlign:'right', textDecoration:'underline', fontFamily:'inherit', letterSpacing:'0.03em', display:'block', width:'100%' }}>
+            How is this scored?
+          </button>
         </div>
       </div>
+
+      {showModal && <ScoreModal onClose={() => setShowModal(false)} />}
 
       {/* ── Row 3: Dependencies side by side — above CVEs ── */}
       {(direct_dependencies.length > 0 || direct_dependents.length > 0) && (

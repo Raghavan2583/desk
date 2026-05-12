@@ -138,9 +138,18 @@ export default function GraphCanvas({
 
   function handleNodeClick(_, node) {
     if (node.id.startsWith('__')) return
+    const n = getNode(node.id)
+    if (n) {
+      setCenter(
+        n.position.x + NODE_WIDTH / 2,
+        n.position.y + NODE_HEIGHT / 2,
+        { duration: 350 },
+      )
+    }
     onNodeClick(node.id)
   }
 
+  const { setCenter, getNode } = useReactFlow()
   const riskColor = RISK_COLORS[packageData?.risk_label] ?? C.muted
 
   return (
