@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
+import { useState } from 'react'
 import ReactFlow, {
   Background,
+  MiniMap,
   Panel,
   MarkerType,
   useNodesState,
@@ -59,6 +61,7 @@ export default function GraphCanvas({
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [showMiniMap, setShowMiniMap] = useState(false)
 
   const { nodes: visNodes, edges: visEdges, totalNeighborCount, isCapped } = useMemo(() => {
     if (!graphData || !focusedPackage) return { nodes: [], edges: [], totalNeighborCount: 0, isCapped: false }
@@ -208,14 +211,34 @@ export default function GraphCanvas({
         </Panel>
       )}
 
-      {/* ── Fit-to-screen button — bottom right ── */}
+      {/* ── Bottom-right controls: mini-map toggle + fit ── */}
       <Panel position="bottom-right">
-        <FitButton />
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:72, marginRight:12 }}>
+          <MapToggleButton active={showMiniMap} onClick={() => setShowMiniMap(v => !v)} />
+          <FitButton />
+        </div>
       </Panel>
+
+      {showMiniMap && (
+        <MiniMap
+          nodeColor={n => RISK_COLORS[n.data?.risk_label] ?? 'rgba(255,255,255,0.15)'}
+          maskColor="rgba(13,17,23,0.75)"
+          style={{ background:'#0D1117', border:'1px solid rgba(110,80,220,0.35)', borderRadius:8, bottom:80, right:60 }}
+          nodeStrokeWidth={0}
+          zoomable
+          pannable
+        />
+      )}
 
       <LayoutController rfNodes={nodes} focusedPackage={focusedPackage} />
     </ReactFlow>
   )
+}
+
+const GRAPH_BTN_BASE = {
+  width: 36, height: 36, borderRadius: 8, cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  transition: 'background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s',
 }
 
 function FitButton() {
@@ -224,33 +247,36 @@ function FitButton() {
     <button
       onClick={() => fitView({ padding: 0.22, duration: 400 })}
       title="Fit graph to screen"
-      style={{
-        width: 36, height: 36,
-        borderRadius: 8,
-        background: '#1E1A2E',
-        border: '1px solid rgba(110,80,220,0.45)',
-        color: 'rgba(255,255,255,0.8)',
-        cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 72, marginRight: 12,
-        boxShadow: '0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)',
-        transition: 'background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background  = 'rgba(110,80,220,0.3)'
-        e.currentTarget.style.borderColor = 'rgba(110,80,220,0.8)'
-        e.currentTarget.style.color       = '#fff'
-        e.currentTarget.style.boxShadow   = '0 0 16px 3px rgba(110,80,220,0.5)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background  = '#1E1A2E'
-        e.currentTarget.style.borderColor = 'rgba(110,80,220,0.45)'
-        e.currentTarget.style.color       = 'rgba(255,255,255,0.8)'
-        e.currentTarget.style.boxShadow   = '0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)'
-      }}
+      style={{ ...GRAPH_BTN_BASE, background:'#1E1A2E', border:'1px solid rgba(110,80,220,0.45)', color:'rgba(255,255,255,0.8)', boxShadow:'0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)' }}
+      onMouseEnter={e => { e.currentTarget.style.background='rgba(110,80,220,0.3)'; e.currentTarget.style.borderColor='rgba(110,80,220,0.8)'; e.currentTarget.style.color='#fff'; e.currentTarget.style.boxShadow='0 0 16px 3px rgba(110,80,220,0.5)' }}
+      onMouseLeave={e => { e.currentTarget.style.background='#1E1A2E'; e.currentTarget.style.borderColor='rgba(110,80,220,0.45)'; e.currentTarget.style.color='rgba(255,255,255,0.8)'; e.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)' }}
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
         <path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4"/>
+      </svg>
+    </button>
+  )
+}
+
+function MapToggleButton({ active, onClick }) {
+  const bg     = active ? 'rgba(110,80,220,0.3)' : '#1E1A2E'
+  const border = active ? 'rgba(110,80,220,0.8)'  : 'rgba(110,80,220,0.45)'
+  const shadow = active ? '0 0 16px 3px rgba(110,80,220,0.5)' : '0 2px 12px rgba(0,0,0,0.6), 0 0 8px 1px rgba(110,80,220,0.2)'
+  return (
+    <button
+      onClick={onClick}
+      title={active ? 'Hide mini-map' : 'Show mini-map'}
+      style={{ ...GRAPH_BTN_BASE, background:bg, border:`1px solid ${border}`, color:'rgba(255,255,255,0.8)', boxShadow:shadow }}
+      onMouseEnter={e => { e.currentTarget.style.background='rgba(110,80,220,0.3)'; e.currentTarget.style.borderColor='rgba(110,80,220,0.8)'; e.currentTarget.style.boxShadow='0 0 16px 3px rgba(110,80,220,0.5)' }}
+      onMouseLeave={e => { e.currentTarget.style.background=bg; e.currentTarget.style.borderColor=border; e.currentTarget.style.boxShadow=shadow }}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="1" width="14" height="14" rx="2"/>
+        <rect x="3" y="3" width="5" height="5" rx="1" fill="currentColor" opacity="0.5"/>
+        <rect x="9" y="3" width="4" height="2" rx="0.5" fill="currentColor" opacity="0.3"/>
+        <rect x="9" y="6" width="4" height="1" rx="0.5" fill="currentColor" opacity="0.2"/>
+        <rect x="3" y="9" width="10" height="1" rx="0.5" fill="currentColor" opacity="0.2"/>
+        <rect x="3" y="11" width="7" height="1" rx="0.5" fill="currentColor" opacity="0.2"/>
       </svg>
     </button>
   )

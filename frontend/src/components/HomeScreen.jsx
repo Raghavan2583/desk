@@ -253,6 +253,12 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
 
   const leaderboard = useMemo(() => {
     if (!graphData?.nodes) return []
+    if (sortBy === 'watch_list') {
+      return [...graphData.nodes]
+        .filter(n => n.data?.risk_label === 'CRITICAL' || n.data?.risk_label === 'HIGH')
+        .sort((a, b) => (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0))
+        .slice(0, 20)
+    }
     return [...graphData.nodes]
       .filter(n => (n.data?.blast_radius_count ?? 0) > 0)
       .sort((a, b) =>
@@ -361,11 +367,15 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 20px', background:'linear-gradient(90deg,#1A1A2E 0%,#16162A 100%)', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
             {/* Title + subtitle */}
             <div style={{ display:'flex', alignItems:'baseline', gap:10, minWidth:0 }}>
-              <span style={{ fontSize:13, fontWeight:700, color:sortBy==='blast_radius' ? '#FF2D9A' : '#E63946', letterSpacing:'0.04em', transition:'color 0.2s', textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : '0 0 18px #E6394666', whiteSpace:'nowrap' }}>
-                {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : 'Risk Score Leaderboard'}
+              <span style={{
+                fontSize:13, fontWeight:700, letterSpacing:'0.04em', transition:'color 0.2s', whiteSpace:'nowrap',
+                color:      sortBy==='blast_radius' ? '#FF2D9A' : sortBy==='risk_score' ? '#E63946' : RISK_COLORS.CRITICAL,
+                textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : sortBy==='risk_score' ? '0 0 18px #E6394666' : `0 0 18px ${RISK_COLORS.CRITICAL}66`,
+              }}>
+                {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : sortBy === 'risk_score' ? 'Risk Score Leaderboard' : 'Watch List'}
               </span>
               <span style={{ fontSize:11, color:'rgba(160,140,255,0.55)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : '— packages with the highest risk scores'}
+                {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : sortBy === 'risk_score' ? '— packages with the highest risk scores' : '— critical & high risk, ranked by blast radius'}
               </span>
             </div>
 
@@ -374,6 +384,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
               {[
                 { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
                 { mode:'risk_score',   label:'Risk Score',   color:'#E63946' },
+                { mode:'watch_list',   label:'Watch List',   color:RISK_COLORS.CRITICAL },
               ].map(({ mode, label, color }) => {
                 const active = sortBy === mode
                 return (

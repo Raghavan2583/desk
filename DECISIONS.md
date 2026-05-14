@@ -244,6 +244,21 @@ DECISION: DE_COLOR=#818CF8 (indigo), SK_COLOR=#F472B6 (rose/pink). Applied to wo
 RATIONALE: Green+red (D039) felt generic. Indigo+rose is distinctive, works on dark backgrounds, feels premium. Critical risk stays red because it is a semantic color (danger), not a brand color.
 LOCKED: 2026-05-12
 
+## D050 — UPGRADE + SAFE VERSION Merged Split Box
+DECISION: When riskDriver is UPGRADE and a safe version exists, the top banner and the safe version badge below CVEs are replaced by a single split box: white outer border + white breathing glow, left half red-tinted with red UPGRADE badge, right half emerald-tinted with green SAFE VERSION badge and version number. All other risk driver types (CRITICAL, ABANDONED, STALE, etc.) retain single-box layout unchanged.
+RATIONALE: Two separate boxes for the same "upgrade available" signal was redundant and visually fragmented. One split box communicates both pieces of information — the action (UPGRADE) and the target (SAFE VERSION) — in a single glanceable unit.
+LOCKED: 2026-05-12
+
+## D051 — Score Modal: Per-Factor Component Breakdown
+DECISION: ScoreModal receives `components` (cve, maintainer, depth, downloads) and `risk_score` from packageData. Each factor row shows its actual pts contribution, a thin color-matched progress bar (fraction of total score), and a Total score row at the bottom.
+RATIONALE: The previous modal showed only static weights (50%, 20%, etc.) with no connection to the specific package's score. Users asked "how do we get 4.3?" — the breakdown makes the derivation transparent and builds trust in the scoring model.
+LOCKED: 2026-05-12
+
+## D052 — TL;DR Summary Panel: Template-Based, DE/SK Colors
+DECISION: A 3-sentence summary panel sits above Depends on/Used by. Left side: ecosystem reach + CVE state + verdict (indigo #818CF8 for verdict line). Right side: plain-English conclusion sentence in peach (#FFAD93). Left border: DE_COLOR (#818CF8). Right border: SK_COLOR (#F472B6). Generated purely from existing packageData fields — no API calls, no backend changes.
+RATIONALE: Most users don't interact with the 5 detail sections. A summary panel above the fold gives the key takeaway — what a security analyst would say after reviewing the data — before the user scrolls. Template approach is zero-cost and ships immediately.
+LOCKED: 2026-05-12
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.

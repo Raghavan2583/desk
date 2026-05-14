@@ -3,6 +3,30 @@
 
 ---
 
+## Session: DESK — 2026-05-12 (night) — ~1.5 hrs
+
+### What happened
+Boss feedback session. Three UI changes shipped to production. (1) UPGRADE banner and SAFE VERSION badge merged into a single split box — white outer border with breathing glow, left half red/amber tint with red UPGRADE badge, right half emerald tint with green SAFE VERSION badge and version number. Standalone safe version badge below CVEs removed (now redundant). (2) "How is this scored?" modal upgraded — each factor row now shows actual pts contribution, a thin color-matched progress bar, and a Total score row at the bottom so users see how the final number was built. (3) TL;DR 3-line summary panel added above Depends on/Used by — left side has 3 narrative sentences (ecosystem reach, CVE state, verdict), right side has a plain-English conclusion sentence in peach. Left border is indigo (#818CF8, DE wordmark color), right border is rose (#F472B6, SK wordmark color). All changes committed (e7e62aa9) and deployed.
+
+### Decisions made
+- D050: UPGRADE banner and SAFE VERSION badge merged into one split box. White outer border + white breathing glow. Red left half (UPGRADE) + emerald right half (SAFE VERSION). Only renders when riskDriver is UPGRADE and a safe version exists — all other driver types (CRITICAL, ABANDONED, STALE) keep single-box layout.
+- D051: Score modal now passes `components` and `risk_score` from packageData. Per-factor pts shown with progress bar (fraction of total score) and total row at bottom.
+- D052: TL;DR panel uses DE_COLOR (#818CF8) left border + SK_COLOR (#F472B6) right border. Left verdict line colored indigo, right conclusion text peach (#FFAD93). Template-based generation from existing data fields — no API calls, no backend change.
+
+### What failed and how it was resolved
+- Changes not visible on localhost: WSL2 Vite file watcher does not detect changes across /mnt/d Windows filesystem boundary. Fix: kill and restart dev server after every edit. This is the permanent workaround for this project setup.
+- Stray extra `}` introduced in ScoreModal JSX — esbuild caught it during build. Fixed immediately before deploy.
+
+### Where we stopped
+Phase: Operate. All changes committed and deployed. Git clean.
+Last commit: e7e62aa9 — UPGRADE+SAFE VERSION merged box, score breakdown modal, TL;DR summary panel.
+
+### Learnings for next D3O cycle
+- WSL2 + Vite: always restart dev server after file edits — HMR does not fire across the /mnt/d boundary. Never diagnose "not visible" as a code issue before restarting the server first.
+- TL;DR wording: template sentences must answer "so what?" not restate data already visible in pills. Boss confirmed plain-English verdict sentences are the right direction.
+
+---
+
 ## Session: DESK — 2026-05-12 (evening) — ~3 hrs
 
 ### What happened

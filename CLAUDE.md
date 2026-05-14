@@ -36,9 +36,9 @@ Pipeline : daily_refresh.yml — 02:07 UTC daily
 Monitor  : schema_monitor.yml — Mondays 08:17 UTC
 
 ## Last Session
-2026-05-12 (evening) — UI polish session. Lost commits recovered. CVE panel rebuilt with
-version-aware remediation (SAFE VERSION badge, patched/unpatched split, one-word verdict).
-Leaderboard title bar redesigned. Homepage wordmark → indigo+rose. Pencil.dev MCP set up.
+2026-05-12 (night) — UPGRADE+SAFE VERSION merged split box. Score modal per-factor
+breakdown (pts + bars + total). TL;DR 3-sentence summary panel above deps/used-by,
+indigo/rose borders, peach conclusion text. Committed e7e62aa9, deployed.
 
 ## Next Action
 Await next boss feedback round or self-initiate:
