@@ -164,7 +164,7 @@ function FloatingCards({ criticalCount }) {
 // ── Leaderboard tile ──────────────────────────────────────────────────────── //
 
 function Tile({ rank, node, onClick }) {
-  const { package_name, risk_label, risk_score, blast_radius_count, trend_direction } = node.data
+  const { package_name, risk_label, risk_score, blast_radius_count, trend_direction, cve_count } = node.data
   const rc   = RISK_COLORS[risk_label] ?? C.muted
   const trnd = trend_direction==='RISING'?'↑':trend_direction==='FALLING'?'↓':'→'
   const tc   = trend_direction==='RISING'?RISK_COLORS.CRITICAL:trend_direction==='FALLING'?RISK_COLORS.LOW:C.muted
@@ -183,7 +183,14 @@ function Tile({ rank, node, onClick }) {
         <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{risk_score}</span>
       </div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</span>
+          {cve_count > 0 && (
+            <span style={{ fontSize:9, fontWeight:700, color:'#FF8C00', background:'rgba(255,140,0,0.12)', border:'1px solid rgba(255,140,0,0.30)', borderRadius:3, padding:'1px 5px' }}>
+              {cve_count} CVE{cve_count !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         <div style={{ display:'flex', alignItems:'center', gap:3 }}>
           <span style={{ fontSize:13, fontWeight:700, color:tc }}>{trnd}</span>
           <span style={{ fontSize:9, fontWeight:700, color:tc, letterSpacing:'0.04em', textTransform:'uppercase' }}>
@@ -257,6 +264,12 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
       return [...graphData.nodes]
         .filter(n => n.data?.risk_label === 'CRITICAL' || n.data?.risk_label === 'HIGH')
         .sort((a, b) => (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0))
+        .slice(0, 20)
+    }
+    if (sortBy === 'cve_count') {
+      return [...graphData.nodes]
+        .filter(n => (n.data?.cve_count ?? 0) > 0)
+        .sort((a, b) => (b.data.cve_count ?? 0) - (a.data.cve_count ?? 0))
         .slice(0, 20)
     }
     return [...graphData.nodes]
@@ -367,16 +380,21 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
           <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 20px', background:'linear-gradient(90deg,#1A1A2E 0%,#16162A 100%)', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
             {/* Title + subtitle */}
             <div style={{ display:'flex', alignItems:'baseline', gap:10, minWidth:0 }}>
-              <span style={{
-                fontSize:13, fontWeight:700, letterSpacing:'0.04em', transition:'color 0.2s', whiteSpace:'nowrap',
-                color:      sortBy==='blast_radius' ? '#FF2D9A' : sortBy==='risk_score' ? '#E63946' : RISK_COLORS.CRITICAL,
-                textShadow: sortBy==='blast_radius' ? '0 0 18px #FF2D9A66' : sortBy==='risk_score' ? '0 0 18px #E6394666' : `0 0 18px ${RISK_COLORS.CRITICAL}66`,
-              }}>
-                {sortBy === 'blast_radius' ? 'Blast Radius Leaderboard' : sortBy === 'risk_score' ? 'Risk Score Leaderboard' : 'Watch List'}
-              </span>
-              <span style={{ fontSize:11, color:'rgba(160,140,255,0.55)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                {sortBy === 'blast_radius' ? '— packages that break the most if they fail' : sortBy === 'risk_score' ? '— packages with the highest risk scores' : '— critical & high risk, ranked by blast radius'}
-              </span>
+              {(() => {
+                const MAP = {
+                  blast_radius: { color:'#FF2D9A', label:'Blast Radius Leaderboard',  sub:'— packages that break the most if they fail' },
+                  risk_score:   { color:'#E63946', label:'Risk Score Leaderboard',    sub:'— packages with the highest risk scores' },
+                  watch_list:   { color:'#FFD700', label:'Watch List',                sub:'— critical & high risk, ranked by blast radius' },
+                  cve_count:    { color:'#FF8C00', label:'CVE Count Leaderboard',     sub:'— packages with the most known vulnerabilities' },
+                }
+                const { color, label, sub } = MAP[sortBy] ?? MAP.blast_radius
+                return (
+                  <>
+                    <span style={{ fontSize:13, fontWeight:700, letterSpacing:'0.04em', transition:'color 0.2s', whiteSpace:'nowrap', color, textShadow:`0 0 18px ${color}66` }}>{label}</span>
+                    <span style={{ fontSize:11, color:'rgba(160,140,255,0.55)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sub}</span>
+                  </>
+                )
+              })()}
             </div>
 
             {/* Sort toggle — segmented pill */}
@@ -384,7 +402,8 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
               {[
                 { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
                 { mode:'risk_score',   label:'Risk Score',   color:'#E63946' },
-                { mode:'watch_list',   label:'Watch List',   color:RISK_COLORS.CRITICAL },
+                { mode:'watch_list',   label:'Watch List',   color:'#FFD700' },
+                { mode:'cve_count',    label:'CVE Count',    color:'#FF8C00' },
               ].map(({ mode, label, color }) => {
                 const active = sortBy === mode
                 return (

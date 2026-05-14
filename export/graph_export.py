@@ -212,6 +212,7 @@ def _build_graph_json(
     packages: dict[str, dict],
     edges: list[dict],
     generated_at: str,
+    cves: dict[str, list] | None = None,
 ) -> dict:
     nodes = [
         {
@@ -224,6 +225,7 @@ def _build_graph_json(
                 "trend_direction":   pkg["trend_direction"],
                 "blast_radius_count":pkg["blast_radius_count"],
                 "monthly_downloads": pkg["monthly_downloads"],
+                "cve_count":         len((cves or {}).get(pkg["package_name"], [])),
             },
             "position": {"x": 0, "y": 0},
         }
@@ -333,7 +335,7 @@ def main() -> None:
     direct_deps, direct_dependents = _load_dependency_graph(top_1000)
 
     # graph.json
-    graph_data = _build_graph_json(packages, edges, generated_at)
+    graph_data = _build_graph_json(packages, edges, generated_at, cves=cves)
     _write_json(OUTPUT_DIR / "graph.json", graph_data)
     logger.info("written graph.json — %d nodes %d edges",
                 len(graph_data["nodes"]), len(graph_data["edges"]))
