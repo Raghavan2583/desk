@@ -204,28 +204,128 @@ function Tile({ rank, node, onClick }) {
 
 // ── Stat pill row ─────────────────────────────────────────────────────────── //
 
-function StatRow({ criticalCount }) {
+function StatRow({ criticalCount, indexData, graphData, onSearch }) {
+  const [open, setOpen] = useState(null)
+  const [search, setSearch] = useState('')
+
+  const criticalPkgs = useMemo(() =>
+    (graphData?.nodes ?? [])
+      .filter(n => n.data?.risk_label === 'CRITICAL')
+      .sort((a, b) => (b.data.risk_score ?? 0) - (a.data.risk_score ?? 0))
+  , [graphData])
+
+  const istTime = useMemo(() => {
+    const ts = graphData?.metadata?.generated_at
+    if (!ts) return 'Unknown'
+    return new Date(ts).toLocaleString('en-IN', {
+      timeZone:'Asia/Kolkata', day:'numeric', month:'short',
+      year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true,
+    }) + ' IST'
+  }, [graphData])
+
+  const filteredPkgs = useMemo(() => {
+    const q = search.toLowerCase()
+    return q ? indexData.filter(p => p.name.includes(q)) : indexData
+  }, [indexData, search])
+
   const items = [
-    { value: '1,000', label: 'packages tracked', color: DE_COLOR },
-    { value: criticalCount, label: 'critical risk', color: '#E63946' },
-    { value: 'Daily', label: 'data refresh', color: '#A78BFA' },
+    { value:'1,000',       label:'packages tracked', key:'packages', color:DE_COLOR   },
+    { value:criticalCount, label:'critical risk',    key:'critical', color:'#E63946'  },
+    { value:'Daily',       label:'data refresh',     key:'refresh',  color:'#A78BFA'  },
   ]
+
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:0, marginTop:20 }}>
-      {items.map((item, i) => (
-        <div key={i} style={{ display:'flex', alignItems:'center' }}>
-          <div style={{ display:'flex', alignItems:'baseline', gap:6, padding:'0 24px', position:'relative' }}>
-            {/* scatter glow */}
-            <div style={{ position:'absolute', inset:'-8px -16px', borderRadius:12, background:`radial-gradient(ellipse 80% 70% at 50% 60%, ${item.color}22 0%, transparent 75%)`, pointerEvents:'none' }}/>
-            <span style={{ fontSize:22, fontWeight:800, color:item.color, fontVariantNumeric:'tabular-nums', textShadow:`0 0 18px ${item.color}99, 0 0 36px ${item.color}44` }}>{item.value}</span>
-            <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>{item.label}</span>
+    <>
+      <div style={{ display:'flex', alignItems:'center', gap:0, marginTop:20 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center' }}>
+            <div onClick={() => { setOpen(open === item.key ? null : item.key); setSearch('') }}
+              style={{ display:'flex', alignItems:'baseline', gap:6, padding:'0 24px', position:'relative', cursor:'pointer' }}
+            >
+              <div style={{ position:'absolute', inset:'-8px -16px', borderRadius:12, background:`radial-gradient(ellipse 80% 70% at 50% 60%, ${item.color}22 0%, transparent 75%)`, pointerEvents:'none' }}/>
+              <span style={{ fontSize:22, fontWeight:800, color:item.color, fontVariantNumeric:'tabular-nums', textShadow:`0 0 18px ${item.color}99, 0 0 36px ${item.color}44` }}>{item.value}</span>
+              <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>{item.label}</span>
+            </div>
+            {i < items.length - 1 && <span style={{ color:C.border, fontSize:18, lineHeight:1 }}>·</span>}
           </div>
-          {i < items.length - 1 && (
-            <span style={{ color:C.border, fontSize:18, lineHeight:1 }}>·</span>
-          )}
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      {open && (
+        <>
+          {/* Dismiss overlay */}
+          <div onClick={() => setOpen(null)} style={{ position:'fixed', inset:0, zIndex:9990 }}/>
+
+          {/* Panel */}
+          {(() => {
+            const pc = { packages:DE_COLOR, critical:'#E63946', refresh:'#A78BFA' }[open]
+            return (
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9991, background:'#13131E', border:`1px solid ${pc}66`, borderRadius:14, boxShadow:`0 24px 64px rgba(0,0,0,0.85), 0 0 0 1px ${pc}22, 0 0 28px 6px ${pc}18`, padding:'20px 24px', width: open==='packages' ? 580 : 300, maxWidth:'90vw' }}>
+
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:C.text }}>
+                {open==='packages' ? '1,000 Tracked Packages' : open==='critical' ? 'Critical Risk' : 'Last Data Refresh'}
+              </span>
+              <button onClick={() => setOpen(null)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, lineHeight:1, padding:0, fontFamily:'inherit' }}>×</button>
+            </div>
+
+            {open === 'packages' && <>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search packages…"
+                style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, padding:'7px 12px', color:C.text, fontSize:12, fontFamily:'inherit', outline:'none', marginBottom:12, boxSizing:'border-box' }}
+              />
+              <div style={{ maxHeight:'55vh', overflowY:'auto', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'2px 6px' }}>
+                {filteredPkgs.map(p => {
+                  const rc = RISK_COLORS[p.risk_label] ?? C.muted
+                  return (
+                    <div key={p.name} onClick={() => { onSearch(p.name); setOpen(null) }}
+                      style={{ display:'flex', alignItems:'center', gap:5, padding:'3px 6px', borderRadius:4, cursor:'pointer', transition:'background 0.1s' }}
+                      onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+                      onMouseLeave={e => e.currentTarget.style.background='transparent'}
+                    >
+                      <span style={{ width:5, height:5, borderRadius:'50%', background:rc, flexShrink:0, boxShadow:`0 0 4px ${rc}88` }}/>
+                      <span style={{ fontSize:11, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ marginTop:10, fontSize:10, color:C.border }}>{filteredPkgs.length} packages</div>
+            </>}
+
+            {open === 'critical' && (
+              criticalPkgs.length === 0
+                ? <p style={{ fontSize:12, color:C.muted, margin:0 }}>No critical packages right now.</p>
+                : <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                    {criticalPkgs.map(n => (
+                      <div key={n.id} onClick={() => { onSearch(n.data.package_name); setOpen(null) }}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 14px', background:'rgba(255,68,68,0.06)', border:'1px solid rgba(255,68,68,0.22)', borderRadius:8, cursor:'pointer', transition:'background 0.12s,border-color 0.12s' }}
+                        onMouseEnter={e=>{ e.currentTarget.style.background='rgba(255,68,68,0.12)'; e.currentTarget.style.borderColor='rgba(255,68,68,0.44)' }}
+                        onMouseLeave={e=>{ e.currentTarget.style.background='rgba(255,68,68,0.06)'; e.currentTarget.style.borderColor='rgba(255,68,68,0.22)' }}
+                      >
+                        <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{n.data.package_name}</span>
+                        <span style={{ fontSize:13, fontWeight:700, color:RISK_COLORS.CRITICAL }}>{n.data.risk_score} / 10</span>
+                      </div>
+                    ))}
+                  </div>
+            )}
+
+            {open === 'refresh' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div>
+                  <div style={{ fontSize:10, color:C.muted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Last refreshed</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:'#A78BFA' }}>{istTime}</div>
+                </div>
+                <p style={{ fontSize:11, color:C.muted, margin:0, lineHeight:1.65 }}>
+                  Pipeline runs daily at 02:07 UTC (07:37 AM IST).<br/>Sources: PyPI · GitHub · OSV · deps.dev
+                </p>
+              </div>
+            )}
+
+          </div>
+            )
+          })()}
+        </>
+      )}
+    </>
   )
 }
 
@@ -282,15 +382,6 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
       .slice(0, 20)
   }, [graphData, sortBy])
 
-  const quickPicks = useMemo(() => {
-    if (!graphData?.nodes) return []
-    const critical = [...graphData.nodes]
-      .filter(n => n.data?.risk_label === 'CRITICAL')
-      .sort((a, b) => (b.data.risk_score ?? 0) - (a.data.risk_score ?? 0))
-      .slice(0, 3)
-      .map(n => n.data.package_name)
-    return [...new Set([...critical, 'requests'])]
-  }, [graphData])
 
   const criticalCount = useMemo(() => {
     if (!graphData?.nodes) return '—'
@@ -344,22 +435,20 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
             <SearchBar packages={indexData} onSearch={onSearch}/>
           </div>
 
-          {quickPicks.length > 0 && (
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14 }}>
-              <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.04em', flexShrink:0 }}>Try:</span>
-              {quickPicks.map(name => (
-                <button key={name} onClick={() => onSearch(name)}
-                  style={{ fontSize:12, color:RISK_COLORS.CRITICAL, background:`${RISK_COLORS.CRITICAL}14`, border:`1px solid ${RISK_COLORS.CRITICAL}33`, borderRadius:6, padding:'4px 12px', cursor:'pointer', fontFamily:'inherit', fontWeight:600, transition:'background 0.12s,border-color 0.12s' }}
-                  onMouseEnter={e=>{ e.currentTarget.style.background=`${RISK_COLORS.CRITICAL}28`; e.currentTarget.style.borderColor=`${RISK_COLORS.CRITICAL}66` }}
-                  onMouseLeave={e=>{ e.currentTarget.style.background=`${RISK_COLORS.CRITICAL}14`; e.currentTarget.style.borderColor=`${RISK_COLORS.CRITICAL}33` }}
-                >{name}</button>
-              ))}
-            </div>
-          )}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14 }}>
+            <span style={{ fontSize:11, color:C.muted, letterSpacing:'0.04em', flexShrink:0 }}>Try:</span>
+            <button onClick={() => onSearch('requests')}
+              style={{ background:'rgba(148,163,184,0.07)', border:'1px solid rgba(148,163,184,0.42)', borderRadius:6, padding:'4px 16px', cursor:'pointer', fontFamily:'inherit', boxShadow:'0 0 10px rgba(148,163,184,0.14)', transition:'all 0.15s' }}
+              onMouseEnter={e=>{ e.currentTarget.style.background='rgba(148,163,184,0.14)'; e.currentTarget.style.borderColor='rgba(148,163,184,0.68)'; e.currentTarget.style.boxShadow='0 0 18px rgba(148,163,184,0.30)' }}
+              onMouseLeave={e=>{ e.currentTarget.style.background='rgba(148,163,184,0.07)'; e.currentTarget.style.borderColor='rgba(148,163,184,0.42)'; e.currentTarget.style.boxShadow='0 0 10px rgba(148,163,184,0.14)' }}
+            >
+              <span style={{ fontSize:12, fontWeight:700, background:'linear-gradient(90deg,#FF6B6B,#FFD700,#4ECDC4,#818CF8,#F472B6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>requests</span>
+            </button>
+          </div>
 
           {loading && <div style={{ fontSize:12, color:C.muted, marginTop:10 }}>Loading…</div>}
 
-          <StatRow criticalCount={criticalCount} />
+          <StatRow criticalCount={criticalCount} indexData={indexData} graphData={graphData} onSearch={onSearch} />
         </div>
 
         {/* ── Scroll hint ── */}
