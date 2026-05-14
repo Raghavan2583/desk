@@ -186,7 +186,7 @@ function Tile({ rank, node, onClick }) {
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ fontSize:10, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} dependents</span>
           {cve_count > 0 && (
-            <span style={{ fontSize:9, fontWeight:700, color:'#FF8C00', background:'rgba(255,140,0,0.12)', border:'1px solid rgba(255,140,0,0.30)', borderRadius:3, padding:'1px 5px' }}>
+            <span style={{ fontSize:9, fontWeight:700, color:'#CBD5E1', background:'rgba(148,163,184,0.12)', border:'1px solid rgba(148,163,184,0.35)', borderRadius:3, padding:'1px 5px', boxShadow:'0 0 6px rgba(148,163,184,0.30)', textShadow:'0 0 8px rgba(203,213,225,0.6)' }}>
               {cve_count} CVE{cve_count !== 1 ? 's' : ''}
             </span>
           )}
@@ -284,11 +284,12 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
 
   const quickPicks = useMemo(() => {
     if (!graphData?.nodes) return []
-    return [...graphData.nodes]
+    const critical = [...graphData.nodes]
       .filter(n => n.data?.risk_label === 'CRITICAL')
       .sort((a, b) => (b.data.risk_score ?? 0) - (a.data.risk_score ?? 0))
-      .slice(0, 4)
+      .slice(0, 3)
       .map(n => n.data.package_name)
+    return [...new Set([...critical, 'requests'])]
   }, [graphData])
 
   const criticalCount = useMemo(() => {
@@ -385,7 +386,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
                   blast_radius: { color:'#FF2D9A', label:'Blast Radius Leaderboard',  sub:'— packages that break the most if they fail' },
                   risk_score:   { color:'#E63946', label:'Risk Score Leaderboard',    sub:'— packages with the highest risk scores' },
                   watch_list:   { color:'#FFD700', label:'Watch List',                sub:'— critical & high risk, ranked by blast radius' },
-                  cve_count:    { color:'#FF8C00', label:'CVE Count Leaderboard',     sub:'— packages with the most known vulnerabilities' },
+                  cve_count:    { color:'#94A3B8', label:'CVE Count Leaderboard',     sub:'— packages with the most known vulnerabilities' },
                 }
                 const { color, label, sub } = MAP[sortBy] ?? MAP.blast_radius
                 return (
@@ -403,7 +404,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
                 { mode:'blast_radius', label:'Blast Radius', color:'#FF2D9A' },
                 { mode:'risk_score',   label:'Risk Score',   color:'#E63946' },
                 { mode:'watch_list',   label:'Watch List',   color:'#FFD700' },
-                { mode:'cve_count',    label:'CVE Count',    color:'#FF8C00' },
+                { mode:'cve_count',    label:'CVE Count',    color:'#94A3B8' },
               ].map(({ mode, label, color }) => {
                 const active = sortBy === mode
                 return (
