@@ -362,7 +362,7 @@ export default function HomeScreen({ indexData, graphData, onSearch, loading }) 
     if (!graphData?.nodes) return []
     if (sortBy === 'watch_list') {
       return [...graphData.nodes]
-        .filter(n => n.data?.risk_label === 'CRITICAL' || n.data?.risk_label === 'HIGH')
+        .filter(n => n.data?.risk_label === 'CRITICAL' || n.data?.risk_label === 'HIGH' || n.data?.risk_label === 'MEDIUM')
         .sort((a, b) => (b.data.blast_radius_count ?? 0) - (a.data.blast_radius_count ?? 0))
         .slice(0, 20)
     }
