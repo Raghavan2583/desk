@@ -83,27 +83,3 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  notify-on-failure:
-    runs-on: ubuntu-latest
-    needs: full_refresh
-    if: failure()
-    steps:
-      - name: Send failure email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.NOTIFY_EMAIL_USER }}
-          password: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
-          subject: "DESK pipeline failed — ${{ github.run_id }}"
-          to: raghavan2583@gmail.com
-          from: DESK Monitor <${{ secrets.NOTIFY_EMAIL_USER }}>
-          body: |
-            The DESK daily refresh pipeline failed on ${{ github.run_id }}.
-
-            Check the run: https://github.com/Raghavan2583/desk/actions/runs/${{ github.run_id }}
-
-            Your site data has NOT been updated today. Investigate and re-run manually once fixed:
-              gh workflow run daily_refresh.yml
-
