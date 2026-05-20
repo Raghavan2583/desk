@@ -3,6 +3,125 @@
 
 ---
 
+## Session: DESK — 2026-05-20 — ~2 hr
+
+### What happened
+Two infrastructure fixes and one large content deliverable. (1) Pipeline bot-push deploy failure diagnosed: daily_refresh.yml was running daily and succeeding, but the site was frozen at May 15 data. Root cause: GitHub Actions does not trigger push-based workflows from github-actions[bot] commits — a security rule. deploy_frontend.yml never fired from data commits. Fix: deploy step added directly inside daily_refresh.yml (D055, supersedes D054). Pipeline manually triggered to update site today. (2) Email alert for pipeline failures: initially added Gmail SMTP approach, then reverted — Coach does not want to share email password. Switched to GitHub native workflow failure notifications (Settings → Notifications → Actions). (3) 8-episode documentary series written covering the full DESK journey from idea to live system: problem statement, design decisions, 4 API battles, dbt + scoring, 12 bugs, frontend evolution, CI/CD failures, and retrospective. Deployed as a standalone reading site (desk/documentary-site/) at https://documentary-site-xi.vercel.app.
+
+### Decisions made
+- D055: daily_refresh.yml deploys Vercel directly (bot push cannot trigger deploy_frontend.yml — GitHub security rule). Supersedes D054.
+- D056: Documentary series (8 episodes) + reading site at documentary-site-xi.vercel.app.
+
+### What failed and how it was resolved
+- Gmail SMTP alert: Coach did not want to share email password. Reverted. GitHub native notifications used instead (no code required).
+- node_modules committed in first documentary commit: .gitignore was missing node_modules/. Fixed with git rm -r --cached and corrected .gitignore.
+- Vercel build failed on first deploy: episodes.js imported markdown from ../../documentary/ (outside project root). Fix: copied markdown files into documentary-site/src/episodes/ for self-contained build.
+
+### Where we stopped
+Phase: Operate. DESK stable. Pipeline now deploys frontend correctly after every daily run. Documentary live at documentary-site-xi.vercel.app. No pending DESK changes.
+
+### Learnings for next D3O cycle
+- GitHub Actions bot-push limitation is a recurring trap. Any workflow that commits data and needs a downstream deploy must include the deploy step in the same job — not rely on a triggered separate workflow.
+- A system is working only when the full chain is verified end-to-end. Pipeline success ≠ site updated. Curl the live URL.
+
+---
+
+## Session: DESK — 2026-05-15 (extended) — ~1 hr
+
+### What happened
+LinkedIn project section content written for DESK. Coach's AVP will review the profile directly. One project entry (not two) — DESK with both the live product URL and deck URL as supporting material. Description written to match the voice of Coach's About section ("trusted data", "boring parts", declarative tone — no flashy language). Final approved copy: "Trusted data isn't just an internal problem. It starts with what your stack depends on. / DESK maps risk across PyPI's top 1,000 packages — maintainer health, CVE count, blast radius, trend. Most teams audit their code. Nobody audits who is still maintaining the code they depend on." Both URLs verified live (200). Thumbnail guidance given — leaderboard section for product, opening slide for deck.
+
+### Decisions made
+- LinkedIn project: one entry, not two. Deck is supporting material inside the same entry, not a separate project.
+- LinkedIn description voice: must match About section tone — short, declarative, trust-focused, no justification language.
+
+### What failed and how it was resolved
+- First draft second line ("Built because a perfectly engineered pipeline can still fail on a dependency nobody was watching") was too explanatory/apologetic. Replaced with a declarative contrast ("Most teams audit their code. Nobody audits who is still maintaining the code they depend on.") to match About section register.
+
+### Where we stopped
+Phase: Operate. DESK stable. LinkedIn content finalised and ready to post. No code changes this segment.
+
+### Learnings for next D3O cycle
+- Profile copy must echo the same voice as the About section — inconsistency is the first thing a senior reviewer notices.
+
+---
+
+## Session: DESK — 2026-05-15 — ~30 min
+
+### What happened
+Two fixes shipped. (1) Watch List leaderboard tab was showing only 12 tiles (CRITICAL+HIGH packages only) while all other tabs show 20 — grid height mismatch caused CVE Count tiles to appear submerged on tab switch. Fixed by including MEDIUM risk in the Watch List filter. (2) Pipeline had run at 06:01 UTC (15 May) and pushed fresh graph data, but a manual deploy from a diverged local branch overwrote it with 14 May data. Root cause: manual `vercel --prod` from local without pulling first. Fixed immediately by rebase + redeploy. Permanent fix: `deploy_frontend.yml` workflow created — triggers on every push to main that touches `frontend/**`. Deploy step removed from `daily_refresh.yml`. No more manual `vercel --prod` ever needed.
+
+### Decisions made
+- D054: deploy_frontend.yml auto-deploys on every push to main (frontend/** paths). Supersedes D033 and D042 pipeline deploy step. No manual vercel --prod — git push is the only deploy action.
+- Watch List filter expanded: CRITICAL + HIGH + MEDIUM (was CRITICAL + HIGH only). Ensures consistent 20-tile grid across all leaderboard tabs.
+
+### What failed and how it was resolved
+- Manual deploy from local branch (Watch List fix) overwrote today's fresh graph data: local was behind the pipeline's data refresh commit. Fixed with git stash + pull --rebase + redeploy.
+
+### Where we stopped
+Phase: Operate. DESK stable, all data current (15 May 2026). Auto-deploy wired — no manual intervention needed for daily refreshes going forward.
+
+### Learnings for next D3O cycle
+- Any manual deploy requires `git pull` first — local branch is often behind pipeline data commits. Eliminated going forward via auto-deploy workflow.
+- Watch List filter scope should match the grid contract (20 items) — if the dataset is too small for the filter, widen the filter, don't shrink the grid.
+
+---
+
+## Session: DESK — 2026-05-14 (deck rebuild) — ~4 hrs
+
+### What happened
+Full desk-deck rebuild for LinkedIn portfolio job search. Boss reviewed the deck and asked for: emotional connect over content, characters using real images (not SVG), architecture diagram using ReactFlow, modern closing slide. Deck rebuilt slide by slide: 10 slides total. Institution stat slide added (skeleton character, teal palette, 96% Synopsys stat). Old riskcard slide removed. Architecture trilogy built (3 ReactFlow diagrams, fully verified against actual codebase files). Glass-shatter animation on closing 'breaks' word — 6 clip-path polygon shards, single @keyframes with CSS variables, infinite loop. Asymmetric billboard closing layout. ARCHITECTURE.md written with full pipeline documentation (scoring formula, dbt layers, export formats, GitHub Actions). Both deployed: deck at desk-deck.vercel.app, ARCHITECTURE.md pushed to GitHub.
+
+### Decisions made
+- D053: desk-deck is a standalone Vercel presentation at desk-deck.vercel.app. Vite+React+Framer Motion+ReactFlow. No GitHub remote yet.
+- Architecture diagrams: ReactFlow with all interaction disabled (no drag, zoom, pan). Custom arch node type with clip-path shard tile approach for glass break effect.
+- Glass shatter: clip-path polygon technique — 6 absolute-positioned text copies, each clipped to an irregular polygon shard. CSS vars (--dx, --dy, --rot) drive unique scatter per shard from one @keyframes.
+- Character images: real webp files (6 characters) — curious/miner, alarmed/balloon, confident/witch, proud/barbarian, royalghost, skeleton. Super Wizard also imported.
+
+### What failed and how it was resolved
+- ReactFlow rendered blank (no nodes visible): container had no explicit pixel height — flex:1 didn't resolve because parent used alignItems:center (shrinks to auto). Fixed by setting explicit height: clamp(320px, 58vh, 460px) on .arch-diagram-wrap.
+- FireMark component undefined error: transient HMR intermediate state during save — resolved automatically after HMR completed.
+- deck-deck push rejected: remote had pipeline data commit ahead of local. Fixed with git stash + pull --rebase + stash pop + push.
+
+### Where we stopped
+Phase: Operate. DESK stable. desk-deck live at https://desk-deck.vercel.app (commit 1e2d4e7). ARCHITECTURE.md pushed (commit d8a845c8). No open work.
+
+### Learnings for next D3O cycle
+- ReactFlow requires explicit pixel height on its container — flex-grow alone is insufficient when the parent chain uses alignItems:center.
+- Clip-path polygon shards with CSS custom properties is the right approach for text-shattering effects — one @keyframes, N shards, zero JS.
+- Architecture diagrams for a portfolio deck should be verified against actual code before presenting — wrong sub-labels erode trust with technical reviewers.
+
+---
+
+## Session: DESK — 2026-05-14 — ~3 hrs
+
+### What happened
+Full feature + presentation session. DESK received several UI improvements across two commits (91f11293 → 3855fd37), all deployed to production. A new standalone project desk-deck was scaffolded — an interactive 10-slide presentation with a CoC-inspired SVG character and Framer Motion transitions. Coach has specific deck changes queued for the next session.
+
+### Decisions made
+- Watch List tab: filter CRITICAL+HIGH, sort by blast radius, gold (#FFD700) — distinct from Risk Score red
+- CVE Count tab: silver (#94A3B8) — 4th leaderboard tab, 178 packages with real cve_count data
+- graph.json enriched with cve_count from per-package files; graph_export.py updated for pipeline
+- Stat row popovers: each stat clickable, colored border matching stat color, package list with risk dots, all items navigate on click
+- "requests" as sole Try: pill — silver outline, rainbow gradient text, single curated suggestion
+- MEDIUM RISK label: bare "MEDIUM" → "MEDIUM RISK" (peer user feedback)
+- desk-deck: separate project, Vite+React+Framer Motion, no Pencil.dev design phase (deck too simple to warrant it), deploy separately
+
+### What failed and how it was resolved
+- Coach corrected auto-deploy twice this session — memory written (feedback_deploy_approval.md). Rule: commit → show localhost → wait for explicit approval before vercel --prod
+- fewer-permission-prompts skill was accidentally invoked mid-session — no harm, just noise
+
+### Where we stopped
+Phase: Operate (DESK live, stable). desk-deck local only, commit 146c959, port 5174.
+Next: Coach changes to desk-deck slides/character, then deploy to separate Vercel URL.
+
+### Learnings for next D3O cycle
+- CVE count not in graph.json by default — must enrich from package files or pipeline. Fixed.
+- Trend data: only 1 month of history exists (May 2026). Risk Movers widget impossible until June+.
+- Popover panels need visible colored borders on dark backgrounds — rgba white borders are invisible.
+
+---
+
 ## Session: DESK — 2026-05-12 (night) — ~1.5 hrs
 
 ### What happened

@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-05-07
+# Phase: Operate | Updated: 2026-05-20
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -30,21 +30,22 @@ Selector   : Project initialised 2026-05-01. Dormant. Reactivates only on re-sco
 Operate — DESK is live
 
 ## Live URLs
-Frontend : https://frontend-sand-seven-57.vercel.app
-Repo     : https://github.com/Raghavan2583/desk
-Pipeline : daily_refresh.yml — 02:07 UTC daily
-Monitor  : schema_monitor.yml — Mondays 08:17 UTC
+Frontend    : https://frontend-sand-seven-57.vercel.app
+Repo        : https://github.com/Raghavan2583/desk
+Pipeline    : daily_refresh.yml — 02:07 UTC daily (deploys Vercel directly — D055)
+Monitor     : schema_monitor.yml — Mondays 08:17 UTC
+Documentary : https://documentary-site-xi.vercel.app
 
 ## Last Session
-2026-05-12 (night) — UPGRADE+SAFE VERSION merged split box. Score modal per-factor
-breakdown (pts + bars + total). TL;DR 3-sentence summary panel above deps/used-by,
-indigo/rose borders, peach conclusion text. Committed e7e62aa9, deployed.
+2026-05-20 — Pipeline deploy gap fixed (D055: bot push can't trigger deploy_frontend.yml —
+deploy step moved back into daily_refresh.yml). 8-episode documentary series written and
+deployed. GitHub native pipeline failure notifications configured.
 
 ## Next Action
-Await next boss feedback round or self-initiate:
-  - Risk Movers widget (packages trending up in risk this week)
-  - Leaderboard tabs (by blast radius / by risk score / by CVE count)
-  - Graph mini-map toggle
+DESK: stable. Pipeline deploy fixed. No pending changes.
+desk-deck: changes coming from Coach's boss review — resume when feedback arrives.
+  Deck URL: https://desk-deck.vercel.app
+  Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 
 ## Project Location
 /mnt/d/PERSONAL/Raghav/Project/Main Projects/desk/

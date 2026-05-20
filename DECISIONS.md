@@ -259,6 +259,26 @@ DECISION: A 3-sentence summary panel sits above Depends on/Used by. Left side: e
 RATIONALE: Most users don't interact with the 5 detail sections. A summary panel above the fold gives the key takeaway — what a security analyst would say after reviewing the data — before the user scrolls. Template approach is zero-cost and ships immediately.
 LOCKED: 2026-05-12
 
+## D053 — desk-deck: LinkedIn Portfolio Presentation
+DECISION: desk-deck is a standalone Vite+React presentation deployed at https://desk-deck.vercel.app. Tech: Framer Motion (transitions), ReactFlow (architecture diagrams, interaction fully disabled), 6 webp character images. 10 slides: hook → institution stat → danger → gap → reveal → arch×3 → proof → closing. No GitHub remote yet — create when Coach decides to make it public.
+RATIONALE: Boss recommended adding a Vercel-hosted deck to LinkedIn for product company job search. Self-contained deck with no presenter needed — evidence, architecture, and product proof built into the slides.
+LOCKED: 2026-05-14
+
+## D054 — Auto-Deploy via deploy_frontend.yml (Supersedes D033)
+DECISION: deploy_frontend.yml triggers on every push to main that touches frontend/** paths. daily_refresh.yml no longer has a Deploy to Vercel step. Manual `vercel --prod` is retired — `git push` is the only deploy action.
+RATIONALE: Manual deploys from local branches that diverged from main overwrote fresh pipeline data. Centralising deployment into a push-triggered workflow means pipeline data commits and code change commits both deploy through the same path — no divergence possible.
+LOCKED: 2026-05-15
+
+## D055 — daily_refresh.yml Deploys Frontend Directly (Supersedes D054)
+DECISION: daily_refresh.yml includes a `Deploy frontend to Vercel` step (npx vercel deploy --prod) after the git data commit. deploy_frontend.yml is retained for code-change deploys only.
+RATIONALE: GitHub Actions does not trigger push-based workflows from commits made by github-actions[bot] — a security rule to prevent infinite loops. With D054's architecture (deploy_frontend.yml triggered by push), bot data commits never triggered deployment. Site showed May 15 data indefinitely. Fix: deploy inside the same job as the data commit. No external trigger required.
+LOCKED: 2026-05-20
+
+## D056 — Documentary Series + Site
+DECISION: 8-episode documentary series written to desk/documentary/. Standalone Vite+React reading site built at desk/documentary-site/ and deployed at https://documentary-site-xi.vercel.app. Markdown files bundled into the site via Vite ?raw imports.
+RATIONALE: Coach requested a shareable record of the full project journey — for personal archive, boss review, and public sharing. Series covers: problem, design decisions, 4 API battles, dbt + scoring, 12 bugs, frontend evolution, CI/CD failures, and honest retrospective. Written without AI attribution — documents the engineering journey as Coach's own work.
+LOCKED: 2026-05-20
+
 ## D023 — GitHub URL Search Fallback in pypi_ingest
 DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
 RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.
