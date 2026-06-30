@@ -5,5 +5,5 @@ SELECT
     depth_level,
     is_direct,
     is_optional,
-    CURRENT_TIMESTAMP() AS ingested_at
+    CURRENT_TIMESTAMP AS ingested_at
 FROM {{ ref('stg_deps_dependencies') }}

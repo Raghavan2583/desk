@@ -1,13 +1,15 @@
 """
 ingestion/pypi_ingest.py
 Fetches package metadata from PyPI JSON API and pypistats.org.
+Seeds the scheduler_queue from hugovk top-1000 list on every run (DuckDB is
+ephemeral — queue must be seeded fresh each pipeline execution).
 Writes new or changed packages to raw_pypi_packages.
 
 Skips packages whose version matches the current record in dim_packages.
 On first run (dim_packages empty), all packages are written.
 
 Usage:
-    GCP_PROJECT_ID=<id> python ingestion/pypi_ingest.py
+    DESK_DB_PATH=data/desk.duckdb python ingestion/pypi_ingest.py
 """
 import json
 import logging
@@ -17,8 +19,8 @@ import time
 from datetime import datetime, timezone
 
 import requests
-from google.cloud import bigquery
 
+from ingestion.db import get_connection, insert_rows
 from ingestion.utils.backoff import retry_with_backoff
 from ingestion.utils.queue import mark_complete, mark_error, mark_running
 from ingestion.utils.validation import validate_response
@@ -26,25 +28,15 @@ from ingestion.utils.validation import validate_response
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PROJECT_ID   = os.environ["GCP_PROJECT_ID"]
-DATASET_RAW  = os.environ.get("GCP_DATASET_RAW",  "desk_raw")
-DATASET_PROD = os.environ.get("GCP_DATASET_PROD", "desk_prod")
-
-client = bigquery.Client(project=PROJECT_ID)
-
-_RAW_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_pypi_packages"
-_QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
-_DIM_TABLE   = f"{PROJECT_ID}.{DATASET_PROD}.dim_packages"
+_PACKAGES_URL = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
+TOP_N = int(os.environ.get("PYPI_TOP_N", "1000"))
 
 # ── GitHub Search fallback ────────────────────────────────────────────────── #
-# Used when no GitHub URL is found in PyPI metadata (project_urls / home_page).
-# Requires GITHUB_TOKENS env var. Gracefully skips if unavailable.
-# Rate-limited at 2.1s/req (~28 req/min) — below the 30 req/min authenticated limit.
 
 _GH_SEARCH_URL   = "https://api.github.com/search/repositories"
 _GH_SEARCH_DELAY = 2.1
 _GH_SEARCH_TOKEN: str | None = None
-_gh_search_rate_limited = False  # abort remaining searches after a 429/403
+_gh_search_rate_limited = False
 
 try:
     from ingestion.utils.token_pool import load_from_env as _load_gh_pool
@@ -73,16 +65,39 @@ PYPI_SCHEMA = {
 
 # ── Data helpers ─────────────────────────────────────────────────────────── #
 
-def _load_queue() -> list[str]:
-    query = f"SELECT package_name FROM `{_QUEUE_TABLE}` ORDER BY package_name"
-    return [row.package_name for row in client.query(query).result()]
+def _seed_queue(conn) -> list[str]:
+    """Fetches top-N packages from hugovk and seeds scheduler_queue for this run."""
+    response = requests.get(_PACKAGES_URL, timeout=30)
+    response.raise_for_status()
+    rows = response.json().get("rows", [])
+    packages = [row["project"].lower() for row in rows[:TOP_N] if row.get("project")]
+    logger.info("fetched %d packages from hugovk", len(packages))
+
+    conn.execute("DELETE FROM desk_prod.scheduler_queue")
+    conn.executemany(
+        "INSERT INTO desk_prod.scheduler_queue (package_name, priority, status, retry_count) VALUES (?, 1, 'pending', 0)",
+        [[p] for p in packages],
+    )
+    logger.info("seeded scheduler_queue with %d packages", len(packages))
+    return packages
 
 
-def _load_known_versions() -> dict[str, str]:
+def _load_queue(conn) -> list[str]:
+    return [
+        row[0]
+        for row in conn.execute(
+            "SELECT package_name FROM desk_prod.scheduler_queue ORDER BY package_name"
+        ).fetchall()
+    ]
+
+
+def _load_known_versions(conn) -> dict[str, str]:
     """Returns {package_name: latest_version} from dim_packages. Empty on first run."""
     try:
-        query = f"SELECT package_name, latest_version FROM `{_DIM_TABLE}`"
-        return {row.package_name: row.latest_version for row in client.query(query).result()}
+        rows = conn.execute(
+            "SELECT package_name, latest_version FROM desk_prod.dim_packages"
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
     except Exception as exc:
         logger.warning("could not load dim_packages — treating all as new: %s", exc)
         return {}
@@ -101,7 +116,6 @@ def _search_github_url(package: str, session: requests.Session) -> str | None:
     """
     Fallback: search GitHub for a repo matching the package name.
     Only called when PyPI metadata contains no GitHub URL.
-    Result stored permanently in raw_pypi_packages on this run.
     """
     global _gh_search_rate_limited
     if _gh_search_rate_limited or not _GH_SEARCH_TOKEN:
@@ -129,7 +143,7 @@ def _search_github_url(package: str, session: requests.Session) -> str | None:
     return None
 
 
-_pypistats_rate_limited = False  # abort remaining calls once we hit a 429
+_pypistats_rate_limited = False
 
 
 def _fetch_monthly_downloads(package: str, session: requests.Session) -> int | None:
@@ -202,70 +216,60 @@ def _build_row(
 # ── Main ─────────────────────────────────────────────────────────────────── #
 
 def main() -> None:
-    logger.info("pypi_ingest starting — project=%s", PROJECT_ID)
+    logger.info("pypi_ingest starting")
+    conn = get_connection()
 
-    packages       = _load_queue()
-    known_versions = _load_known_versions()
-    logger.info("packages in queue: %d  known in dim_packages: %d",
-                len(packages), len(known_versions))
+    try:
+        _seed_queue(conn)
+        packages       = _load_queue(conn)
+        known_versions = _load_known_versions(conn)
+        logger.info("packages in queue: %d  known in dim_packages: %d",
+                    len(packages), len(known_versions))
 
-    mark_running(client, _QUEUE_TABLE, packages)
+        mark_running(conn, packages)
 
-    rows: list[dict]      = []
-    completed: list[str]  = []
-    skipped = 0
+        rows: list[dict]      = []
+        completed: list[str]  = []
+        skipped = 0
 
-    with requests.Session() as session:
-        for i, package in enumerate(packages):
-            if i % 100 == 0:
-                logger.info("progress: %d/%d packages", i, len(packages))
-            try:
-                data    = _fetch_pypi(package, session)
-                version = data["info"].get("version")
-                known   = known_versions.get(package)
+        with requests.Session() as session:
+            for i, package in enumerate(packages):
+                if i % 100 == 0:
+                    logger.info("progress: %d/%d packages", i, len(packages))
+                try:
+                    data    = _fetch_pypi(package, session)
+                    version = data["info"].get("version")
+                    known   = known_versions.get(package)
 
-                if known and known == version:
-                    skipped += 1
+                    if known and known == version:
+                        skipped += 1
+                        completed.append(package)
+                        continue
+
+                    downloads = _fetch_monthly_downloads(package, session)
+                    gh_url    = _extract_github_url(data["info"])
+                    if not gh_url:
+                        gh_url = _search_github_url(package, session)
+
+                    rows.append(_build_row(data, downloads, github_url=gh_url))
                     completed.append(package)
-                    continue
 
-                downloads = _fetch_monthly_downloads(package, session)
+                except Exception as exc:
+                    logger.error("failed: %s — %s", package, exc)
+                    mark_error(conn, package, str(exc), "last_pypi_ingest_at")
 
-                # GitHub URL: try PyPI metadata first, fall back to Search API.
-                # The discovered URL is stored in this row — once written to
-                # raw_pypi_packages it persists on future runs without re-searching.
-                gh_url = _extract_github_url(data["info"])
-                if not gh_url:
-                    gh_url = _search_github_url(package, session)
+        if rows:
+            insert_rows(conn, "desk_raw.raw_pypi_packages", rows)
+            logger.info("inserted %d rows into raw_pypi_packages", len(rows))
 
-                rows.append(_build_row(data, downloads, github_url=gh_url))
-                completed.append(package)
+        mark_complete(conn, completed, "last_pypi_ingest_at")
 
-            except Exception as exc:
-                logger.error("failed: %s — %s", package, exc)
-                mark_error(client, _QUEUE_TABLE, package, str(exc), "last_pypi_ingest_at")
-
-    if rows:
-        # Load job — handles large raw_payload rows that exceed streaming insert limits.
-        job = client.load_table_from_json(
-            rows,
-            _RAW_TABLE,
-            job_config=bigquery.LoadJobConfig(
-                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-                schema=client.get_table(_RAW_TABLE).schema,
-            ),
+        logger.info(
+            "pypi_ingest complete — written=%d skipped=%d errors=%d",
+            len(rows), skipped, len(packages) - len(completed),
         )
-        job.result()
-        if job.errors:
-            raise RuntimeError("BigQuery load failed: %s" % job.errors)
-        logger.info("inserted %d rows into raw_pypi_packages", len(rows))
-
-    mark_complete(client, _QUEUE_TABLE, completed, "last_pypi_ingest_at")
-
-    logger.info(
-        "pypi_ingest complete — written=%d skipped=%d errors=%d",
-        len(rows), skipped, len(packages) - len(completed),
-    )
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """
 export/graph_export.py
-Reads scored data from BigQuery and writes static JSON files consumed by the frontend.
+Reads scored data from DuckDB and writes static JSON files consumed by the frontend.
 
 Outputs (all under OUTPUT_DIR = frontend/public/data/):
   graph.json              — full node/edge graph for React Flow (loaded on first search)
@@ -8,7 +8,7 @@ Outputs (all under OUTPUT_DIR = frontend/public/data/):
   package/{name}.json     — per-package detail panel (loaded on node click)
 
 Usage:
-    GCP_PROJECT_ID=<id> RISK_SCORE_VERSION=1 python export/graph_export.py
+    DESK_DB_PATH=data/desk.duckdb RISK_SCORE_VERSION=1 python export/graph_export.py
 """
 import json
 import logging
@@ -16,39 +16,38 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from google.cloud import bigquery
+import duckdb
+import pandas as pd
+
+from ingestion.db import DB_PATH, get_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PROJECT_ID    = os.environ["GCP_PROJECT_ID"]
-DATASET_PROD  = os.environ.get("GCP_DATASET_PROD", "desk_prod")
 SCORE_VERSION = int(os.environ.get("RISK_SCORE_VERSION", "1"))
 OUTPUT_DIR    = Path(os.environ.get("GRAPH_OUTPUT_DIR", "frontend/public/data"))
+_HISTORY_DIR  = Path(os.environ.get("DESK_HISTORY_DIR", "data/history"))
 
-client = bigquery.Client(project=PROJECT_ID)
+HISTORY_PARQUET = _HISTORY_DIR / "fact_risk_score_history.parquet"
 
-_P = f"{PROJECT_ID}.{DATASET_PROD}"
-
-_FACT_SCORES      = f"{_P}.fact_risk_scores"
-_FACT_HISTORY     = f"{_P}.fact_risk_score_history"
-_DIM_PACKAGES     = f"{_P}.dim_packages"
-_DIM_MAINTAINERS  = f"{_P}.dim_maintainers"
-_FACT_DEPS        = f"{_P}.fact_dependencies"
-_STG_CVE          = f"{_P}.stg_osv_cves"
-
-# ── Timestamp serializer ─────────────────────────────────────────────────── #
+# ── Helpers ──────────────────────────────────────────────────────────────── #
 
 def _ts(value) -> str | None:
     if value is None:
         return None
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
+
+def _df_rows(conn, query: str) -> list[dict]:
+    """Execute query and return list of dicts with NaN replaced by None."""
+    df = conn.execute(query).df()
+    df = df.where(pd.notnull(df), None)
+    return df.to_dict(orient="records")
+
 # ── Data loaders ─────────────────────────────────────────────────────────── #
 
-def _load_packages() -> dict[str, dict]:
-    """Returns {package_name: full_package_dict} joining scores + dim tables."""
-    query = f"""
+def _load_packages(conn) -> dict[str, dict]:
+    rows = _df_rows(conn, """
         SELECT
             p.package_name,
             p.latest_version,
@@ -72,42 +71,32 @@ def _load_packages() -> dict[str, dict]:
             m.contributors_count,
             m.is_archived,
             m.activity_label
-        FROM `{_FACT_SCORES}` r
-        JOIN `{_DIM_PACKAGES}` p ON r.package_name = p.package_name
-        LEFT JOIN `{_DIM_MAINTAINERS}` m ON p.github_repo_url = m.github_repo_url
-    """
-    packages = {}
-    for row in client.query(query).result():
-        packages[row.package_name] = dict(row)
+        FROM desk_prod.fact_risk_scores r
+        JOIN desk_prod.dim_packages p ON r.package_name = p.package_name
+        LEFT JOIN desk_prod.dim_maintainers m ON p.github_repo_url = m.github_repo_url
+    """)
+    packages = {row["package_name"]: row for row in rows}
     logger.info("loaded %d scored packages", len(packages))
     return packages
 
 
-def _load_direct_edges(top_1000: set[str]) -> list[dict]:
-    """
-    Returns direct edges where BOTH source and target are in the top-1,000.
-    Used for graph.json nodes and edges.
-    """
-    query = f"""
+def _load_direct_edges(top_1000: set[str], conn) -> list[dict]:
+    rows = _df_rows(conn, """
         SELECT
             package_name AS source,
             dependency_name AS target,
             dependency_version_constraint AS version_constraint
-        FROM `{_FACT_DEPS}`
+        FROM desk_prod.fact_dependencies
         WHERE is_direct = TRUE
           AND NOT COALESCE(is_optional, FALSE)
-    """
-    edges = [
-        dict(row) for row in client.query(query).result()
-        if row.source in top_1000 and row.target in top_1000
-    ]
+    """)
+    edges = [r for r in rows if r["source"] in top_1000 and r["target"] in top_1000]
     logger.info("loaded %d direct edges within top-1,000", len(edges))
     return edges
 
 
-def _load_cves() -> dict[str, list[dict]]:
-    """Returns {package_name: [cve_dict, ...]} sorted by cvss_score DESC."""
-    query = f"""
+def _load_cves(conn) -> dict[str, list[dict]]:
+    rows = _df_rows(conn, """
         SELECT
             package_name,
             osv_id,
@@ -115,91 +104,81 @@ def _load_cves() -> dict[str, list[dict]]:
             cvss_score,
             published_at,
             fixed_in_version
-        FROM `{_STG_CVE}`
+        FROM desk_prod.stg_osv_cves
         ORDER BY package_name, cvss_score DESC NULLS LAST
-    """
+    """)
     cves: dict[str, list] = {}
-    for row in client.query(query).result():
-        cves.setdefault(row.package_name, []).append({
-            "osv_id":           row.osv_id,
-            "severity":         row.severity,
-            "cvss_score":       row.cvss_score,
-            "published_at":     _ts(row.published_at),
-            "fixed_in_version": row.fixed_in_version,
+    for row in rows:
+        cves.setdefault(row["package_name"], []).append({
+            "osv_id":           row["osv_id"],
+            "severity":         row["severity"],
+            "cvss_score":       row["cvss_score"],
+            "published_at":     _ts(row["published_at"]),
+            "fixed_in_version": row["fixed_in_version"],
         })
     logger.info("loaded CVEs for %d packages", len(cves))
     return cves
 
 
 def _load_trend_history() -> dict[str, list[dict]]:
-    """
-    Returns {package_name: [{date: YYYY-MM, risk_score: x.x}, ...]}
-    One entry per calendar month, last 12 months, same score_version.
-    """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("score_version", "INT64", SCORE_VERSION)
-        ]
-    )
-    query = f"""
-        SELECT package_name, month, risk_score
-        FROM (
-            SELECT
-                package_name,
-                FORMAT_DATE('%Y-%m', DATE(computed_at)) AS month,
-                risk_score,
-                ROW_NUMBER() OVER (
-                    PARTITION BY package_name, FORMAT_DATE('%Y-%m', DATE(computed_at))
-                    ORDER BY computed_at DESC
-                ) AS rn
-            FROM `{_FACT_HISTORY}`
-            WHERE score_version = @score_version
-              AND DATE(computed_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
-        )
-        WHERE rn = 1
-        ORDER BY package_name, month
-    """
+    if not HISTORY_PARQUET.exists():
+        logger.info("no history parquet yet — trend history empty")
+        return {}
+    conn_mem = duckdb.connect(":memory:")
+    try:
+        rows = conn_mem.execute("""
+            SELECT package_name, month, risk_score
+            FROM (
+                SELECT
+                    package_name,
+                    STRFTIME('%Y-%m', computed_at::TIMESTAMP) AS month,
+                    risk_score,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY package_name,
+                                     STRFTIME('%Y-%m', computed_at::TIMESTAMP)
+                        ORDER BY computed_at DESC
+                    ) AS rn
+                FROM read_parquet(?)
+                WHERE score_version = ?
+                  AND computed_at::DATE >= CURRENT_DATE - INTERVAL '12 months'
+            )
+            WHERE rn = 1
+            ORDER BY package_name, month
+        """, [str(HISTORY_PARQUET), SCORE_VERSION]).fetchall()
+    finally:
+        conn_mem.close()
+
     history: dict[str, list] = {}
-    for row in client.query(query, job_config=job_config).result():
-        history.setdefault(row.package_name, []).append({
-            "date":       row.month,
-            "risk_score": row.risk_score,
+    for row in rows:
+        history.setdefault(row[0], []).append({
+            "date":       row[1],
+            "risk_score": row[2],
         })
     logger.info("loaded trend history for %d packages", len(history))
     return history
 
 
-def _load_dependency_graph(
-    top_1000: set[str],
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """
-    Returns:
-      direct_deps:       {package_name: [dep_name, ...]}  — what this package depends on
-      direct_dependents: {package_name: [dependent, ...]} — what depends on this package
-                         sorted by blast_radius_count DESC, max 10, top-1,000 only
-    """
-    query = f"""
+def _load_dependency_graph(top_1000: set[str], conn) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    rows = _df_rows(conn, """
         SELECT
             f.package_name,
             f.dependency_name,
             COALESCE(r.blast_radius_count, 0) AS dep_blast_radius
-        FROM `{_FACT_DEPS}` f
-        LEFT JOIN `{_FACT_SCORES}` r ON f.package_name = r.package_name
+        FROM desk_prod.fact_dependencies f
+        LEFT JOIN desk_prod.fact_risk_scores r ON f.package_name = r.package_name
         WHERE f.is_direct = TRUE
           AND NOT COALESCE(f.is_optional, FALSE)
-    """
-    direct_deps: dict[str, list[str]]                  = {}
-    dependents_raw: dict[str, list[tuple[str, int]]]   = {}
+    """)
+    direct_deps: dict[str, list[str]]                = {}
+    dependents_raw: dict[str, list[tuple[str, int]]] = {}
 
-    for row in client.query(query).result():
-        src = row.package_name
-        tgt = row.dependency_name
-
+    for row in rows:
+        src = row["package_name"]
+        tgt = row["dependency_name"]
         if src in top_1000 and tgt in top_1000:
             direct_deps.setdefault(src, []).append(tgt)
-            dependents_raw.setdefault(tgt, []).append((src, row.dep_blast_radius))
+            dependents_raw.setdefault(tgt, []).append((src, row["dep_blast_radius"] or 0))
 
-    # Sort dependents by blast_radius_count DESC, take top 10
     direct_dependents = {
         pkg: [dep for dep, _ in sorted(pairs, key=lambda x: x[1], reverse=True)[:10]]
         for pkg, pairs in dependents_raw.items()
@@ -219,13 +198,13 @@ def _build_graph_json(
             "id":   pkg["package_name"],
             "type": "package",
             "data": {
-                "package_name":      pkg["package_name"],
-                "risk_score":        pkg["risk_score"],
-                "risk_label":        pkg["risk_label"],
-                "trend_direction":   pkg["trend_direction"],
-                "blast_radius_count":pkg["blast_radius_count"],
-                "monthly_downloads": pkg["monthly_downloads"],
-                "cve_count":         len((cves or {}).get(pkg["package_name"], [])),
+                "package_name":       pkg["package_name"],
+                "risk_score":         pkg["risk_score"],
+                "risk_label":         pkg["risk_label"],
+                "trend_direction":    pkg["trend_direction"],
+                "blast_radius_count": pkg["blast_radius_count"],
+                "monthly_downloads":  pkg["monthly_downloads"],
+                "cve_count":          len((cves or {}).get(pkg["package_name"], [])),
             },
             "position": {"x": 0, "y": 0},
         }
@@ -258,12 +237,12 @@ def _build_index_json(packages: dict[str, dict], generated_at: str) -> dict:
     entries = sorted(
         [
             {
-                "name":              pkg["package_name"],
-                "risk_label":        pkg["risk_label"],
-                "risk_score":        pkg["risk_score"],
-                "blast_radius_count":pkg["blast_radius_count"],
-                "trend_direction":   pkg["trend_direction"],
-                "monthly_downloads": pkg["monthly_downloads"],
+                "name":               pkg["package_name"],
+                "risk_label":         pkg["risk_label"],
+                "risk_score":         pkg["risk_score"],
+                "blast_radius_count": pkg["blast_radius_count"],
+                "trend_direction":    pkg["trend_direction"],
+                "monthly_downloads":  pkg["monthly_downloads"],
             }
             for pkg in packages.values()
         ],
@@ -283,12 +262,12 @@ def _build_package_json(
     maintainer = None
     if pkg["has_github_link"]:
         maintainer = {
-            "last_commit_at":        _ts(pkg["last_commit_at"]),
-            "days_since_last_commit": pkg["days_since_last_commit"],
-            "commit_count_90d":       pkg["commit_count_90d"],
-            "contributors_count":     pkg["contributors_count"],
-            "is_archived":            pkg["is_archived"],
-            "activity_label":         pkg["activity_label"],
+            "last_commit_at":         _ts(pkg["last_commit_at"]),
+            "days_since_last_commit":  pkg["days_since_last_commit"],
+            "commit_count_90d":        pkg["commit_count_90d"],
+            "contributors_count":      pkg["contributors_count"],
+            "is_archived":             pkg["is_archived"],
+            "activity_label":          pkg["activity_label"],
         }
     return {
         "package_name":         pkg["package_name"],
@@ -324,15 +303,19 @@ def _write_json(path: Path, data: dict) -> None:
 # ── Main ─────────────────────────────────────────────────────────────────── #
 
 def main() -> None:
-    logger.info("graph_export starting — version=%d project=%s", SCORE_VERSION, PROJECT_ID)
+    logger.info("graph_export starting — version=%d", SCORE_VERSION)
     generated_at = datetime.now(timezone.utc).isoformat()
+    conn = get_connection()
 
-    packages       = _load_packages()
-    top_1000       = set(packages.keys())
-    edges          = _load_direct_edges(top_1000)
-    cves           = _load_cves()
-    trend_history  = _load_trend_history()
-    direct_deps, direct_dependents = _load_dependency_graph(top_1000)
+    try:
+        packages    = _load_packages(conn)
+        top_1000    = set(packages.keys())
+        edges       = _load_direct_edges(top_1000, conn)
+        cves        = _load_cves(conn)
+        trend_history  = _load_trend_history()
+        direct_deps, direct_dependents = _load_dependency_graph(top_1000, conn)
+    finally:
+        conn.close()
 
     # graph.json
     graph_data = _build_graph_json(packages, edges, generated_at, cves=cves)

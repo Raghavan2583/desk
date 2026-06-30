@@ -1,42 +1,34 @@
 """
 scoring/risk_score.py
-Computes risk scores for all packages using the weighted formula (ARCH.md Section 4).
+Computes risk scores for all packages using the weighted formula (SPEC.md Section 4).
 
-Writes:
-  fact_risk_scores        — WRITE_TRUNCATE (current scores, overwritten each run)
-  fact_risk_score_history — WRITE_APPEND   (append-only, never deleted)
+Writes to DuckDB:
+  desk_prod.fact_risk_scores — current scores, truncated and replaced each run
 
-Design note: ARCH.md Section 4 references fact_risk_score_history for prev_monthly_downloads.
-That table does not store monthly_downloads (its schema mirrors fact_risk_scores).
-prev_monthly is therefore read from raw_pypi_packages ~180 days ago, which holds the data
-because it is append-only partitioned storage.
+Appends to Parquet (committed to repo):
+  data/history/fact_risk_score_history.parquet — append-only score history
+  data/history/download_history.parquet        — append-only download history
 
 Usage:
-    GCP_PROJECT_ID=<id> RISK_SCORE_VERSION=1 python scoring/risk_score.py
+    DESK_DB_PATH=data/desk.duckdb RISK_SCORE_VERSION=1 python scoring/risk_score.py
 """
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
-from google.cloud import bigquery
+import duckdb
+
+from ingestion.db import DB_PATH, get_connection, insert_rows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PROJECT_ID    = os.environ["GCP_PROJECT_ID"]
-DATASET_PROD  = os.environ.get("GCP_DATASET_PROD",  "desk_prod")
-DATASET_RAW   = os.environ.get("GCP_DATASET_RAW",   "desk_raw")
 SCORE_VERSION = int(os.environ.get("RISK_SCORE_VERSION", "1"))
+_HISTORY_DIR  = Path(os.environ.get("DESK_HISTORY_DIR", "data/history"))
 
-client = bigquery.Client(project=PROJECT_ID)
-
-_DIM_PACKAGES    = f"{PROJECT_ID}.{DATASET_PROD}.dim_packages"
-_DIM_MAINTAINERS = f"{PROJECT_ID}.{DATASET_PROD}.dim_maintainers"
-_INT_CVE         = f"{PROJECT_ID}.{DATASET_PROD}.int_cve_summary_per_package"
-_INT_DEPS        = f"{PROJECT_ID}.{DATASET_PROD}.int_dependency_metrics"
-_RAW_PYPI        = f"{PROJECT_ID}.{DATASET_RAW}.raw_pypi_packages"
-_FACT_SCORES     = f"{PROJECT_ID}.{DATASET_PROD}.fact_risk_scores"
-_FACT_HISTORY    = f"{PROJECT_ID}.{DATASET_PROD}.fact_risk_score_history"
+HISTORY_PARQUET          = _HISTORY_DIR / "fact_risk_score_history.parquet"
+DOWNLOAD_HISTORY_PARQUET = _HISTORY_DIR / "download_history.parquet"
 
 # ── Data loading ─────────────────────────────────────────────────────────── #
 
@@ -54,97 +46,96 @@ SELECT
     COALESCE(c.medium_count,   0) AS medium_count,
     COALESCE(c.low_count,      0) AS low_count,
     COALESCE(d.blast_radius_count, 0) AS blast_radius_count
-FROM `{dim_packages}` p
-LEFT JOIN `{dim_maintainers}` m ON p.github_repo_url = m.github_repo_url
-LEFT JOIN `{int_cve}`          c ON p.package_name    = c.package_name
-LEFT JOIN `{int_deps}`         d ON p.package_name    = d.package_name
+FROM desk_prod.dim_packages p
+LEFT JOIN desk_prod.dim_maintainers              m ON p.github_repo_url = m.github_repo_url
+LEFT JOIN desk_prod.int_cve_summary_per_package  c ON p.package_name    = c.package_name
+LEFT JOIN desk_prod.int_dependency_metrics       d ON p.package_name    = d.package_name
 """
 
-_PREV_SCORES_QUERY = """
-SELECT package_name, risk_score AS prev_risk_score
-FROM (
-    SELECT
-        package_name,
-        risk_score,
-        ROW_NUMBER() OVER (
-            PARTITION BY package_name
-            ORDER BY ABS(DATE_DIFF(DATE(computed_at),
-                                   DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), DAY))
-        ) AS rn
-    FROM `{history}`
-    WHERE score_version = @score_version
-      AND DATE(computed_at)
-          BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 35 DAY)
-              AND DATE_SUB(CURRENT_DATE(), INTERVAL 25 DAY)
-)
-WHERE rn = 1
-"""
 
-_PREV_DOWNLOADS_QUERY = """
-SELECT package_name, monthly_downloads AS prev_monthly_downloads
-FROM (
-    SELECT
-        package_name,
-        monthly_downloads,
-        ROW_NUMBER() OVER (
-            PARTITION BY package_name
-            ORDER BY ABS(DATE_DIFF(DATE(ingested_at),
-                                   DATE_SUB(CURRENT_DATE(), INTERVAL 180 DAY), DAY))
-        ) AS rn
-    FROM `{raw_pypi}`
-    WHERE monthly_downloads IS NOT NULL
-      AND DATE(ingested_at)
-          BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 185 DAY)
-              AND DATE_SUB(CURRENT_DATE(), INTERVAL 175 DAY)
-)
-WHERE rn = 1
-"""
-
-_LAST_VERSION_QUERY = "SELECT MAX(score_version) AS last_version FROM `{history}`"
-
-
-def _load_packages() -> list[dict]:
-    query = _MAIN_QUERY.format(
-        dim_packages=_DIM_PACKAGES,
-        dim_maintainers=_DIM_MAINTAINERS,
-        int_cve=_INT_CVE,
-        int_deps=_INT_DEPS,
-    )
-    rows = [dict(row) for row in client.query(query).result()]
+def _load_packages(conn) -> list[dict]:
+    import pandas as pd
+    df = conn.execute(_MAIN_QUERY).df()
+    df = df.where(pd.notnull(df), None)
+    rows = df.to_dict(orient="records")
     logger.info("loaded %d packages for scoring", len(rows))
     return rows
 
 
 def _load_prev_scores() -> dict[str, float]:
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("score_version", "INT64", SCORE_VERSION)
-        ]
-    )
-    query = _PREV_SCORES_QUERY.format(history=_FACT_HISTORY)
-    return {
-        row.package_name: row.prev_risk_score
-        for row in client.query(query, job_config=job_config).result()
-    }
+    if not HISTORY_PARQUET.exists():
+        return {}
+    conn_mem = duckdb.connect(":memory:")
+    try:
+        rows = conn_mem.execute("""
+            SELECT package_name, risk_score AS prev_risk_score
+            FROM (
+                SELECT
+                    package_name,
+                    risk_score,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY package_name
+                        ORDER BY ABS(DATEDIFF('day', computed_at::DATE,
+                                              CURRENT_DATE - INTERVAL '30 days'))
+                    ) AS rn
+                FROM read_parquet(?)
+                WHERE score_version = ?
+                  AND computed_at::DATE
+                      BETWEEN CURRENT_DATE - INTERVAL '35 days'
+                          AND CURRENT_DATE - INTERVAL '25 days'
+            )
+            WHERE rn = 1
+        """, [str(HISTORY_PARQUET), SCORE_VERSION]).fetchall()
+    finally:
+        conn_mem.close()
+    return {row[0]: row[1] for row in rows}
 
 
 def _load_prev_downloads() -> dict[str, int]:
-    query = _PREV_DOWNLOADS_QUERY.format(raw_pypi=_RAW_PYPI)
-    return {
-        row.package_name: row.prev_monthly_downloads
-        for row in client.query(query).result()
-    }
+    if not DOWNLOAD_HISTORY_PARQUET.exists():
+        return {}
+    conn_mem = duckdb.connect(":memory:")
+    try:
+        rows = conn_mem.execute("""
+            SELECT package_name, monthly_downloads AS prev_monthly_downloads
+            FROM (
+                SELECT
+                    package_name,
+                    monthly_downloads,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY package_name
+                        ORDER BY ABS(DATEDIFF('day', recorded_at::DATE,
+                                              CURRENT_DATE - INTERVAL '180 days'))
+                    ) AS rn
+                FROM read_parquet(?)
+                WHERE monthly_downloads IS NOT NULL
+                  AND recorded_at::DATE
+                      BETWEEN CURRENT_DATE - INTERVAL '185 days'
+                          AND CURRENT_DATE - INTERVAL '175 days'
+            )
+            WHERE rn = 1
+        """, [str(DOWNLOAD_HISTORY_PARQUET)]).fetchall()
+    finally:
+        conn_mem.close()
+    return {row[0]: row[1] for row in rows}
 
 
 def _version_changed() -> bool:
-    """True if RISK_SCORE_VERSION differs from the latest version in history."""
-    query = _LAST_VERSION_QUERY.format(history=_FACT_HISTORY)
-    result = list(client.query(query).result())
-    if not result or result[0].last_version is None:
-        return False  # first run — no version change
-    return int(result[0].last_version) != SCORE_VERSION
+    if not HISTORY_PARQUET.exists():
+        return False
+    conn_mem = duckdb.connect(":memory:")
+    try:
+        result = conn_mem.execute(
+            "SELECT MAX(score_version) AS last_version FROM read_parquet(?)",
+            [str(HISTORY_PARQUET)],
+        ).fetchone()
+    finally:
+        conn_mem.close()
+    if not result or result[0] is None:
+        return False
+    return int(result[0]) != SCORE_VERSION
 
-# ── Formula components (ARCH.md Section 4) ───────────────────────────────── #
+# ── Formula components (SPEC.md Section 4) ───────────────────────────────── #
 
 def _maintainer_raw(
     days: int | None,
@@ -153,13 +144,13 @@ def _maintainer_raw(
     has_github_link: bool,
 ) -> float:
     if not has_github_link:
-        return 5.0  # no GitHub URL — neutral unknown
+        return 5.0
 
     archived = bool(is_archived)
     commits  = commit_count_90d or 0
 
     if days is None:
-        base = 10.0  # no commit history — treat as worst case
+        base = 10.0
     elif days <= 30:   base = 0.0
     elif days <= 90:   base = 2.0
     elif days <= 180:  base = 4.0
@@ -181,20 +172,20 @@ def _cve_raw(critical: int, high: int, medium: int, low: int) -> float:
 
 
 def _depth_raw(blast_radius: int) -> float:
-    if blast_radius == 0:    return 0.0
-    elif blast_radius <= 10: return 2.0
-    elif blast_radius <= 50: return 4.0
+    if blast_radius == 0:     return 0.0
+    elif blast_radius <= 10:  return 2.0
+    elif blast_radius <= 50:  return 4.0
     elif blast_radius <= 100: return 6.0
     elif blast_radius <= 200: return 8.0
-    else:                    return 10.0
+    else:                     return 10.0
 
 
 def _download_raw(current: int | None, prev: int | None) -> float:
     if current is None or prev is None or prev == 0:
-        return 5.0  # no history or divide-by-zero — neutral
+        return 5.0
     pct = (current - prev) / prev
-    if pct > 0.20:   return 0.0
-    elif pct > 0.0:  return 2.0
+    if pct > 0.20:    return 0.0
+    elif pct > 0.0:   return 2.0
     elif pct > -0.10: return 4.0
     elif pct > -0.30: return 6.0
     elif pct > -0.50: return 8.0
@@ -202,10 +193,10 @@ def _download_raw(current: int | None, prev: int | None) -> float:
 
 
 def _risk_label(score: float) -> str:
-    if score <= 2.9:  return "LOW"
-    elif score <= 4.9: return "MEDIUM"
-    elif score <= 7.4: return "HIGH"
-    else:              return "CRITICAL"
+    if score <= 2.9:    return "LOW"
+    elif score <= 4.9:  return "MEDIUM"
+    elif score <= 7.4:  return "HIGH"
+    else:               return "CRITICAL"
 
 
 def _trend(current: float, prev: float | None, version_changed: bool) -> str:
@@ -244,66 +235,101 @@ def _score_package(
     c_comp  = round(c_raw  * 0.3, 4)
     d_comp  = round(d_raw  * 0.2, 4)
     dl_comp = round(dl_raw * 0.1, 4)
-
-    score = round(m_comp + c_comp + d_comp + dl_comp, 1)
+    score   = round(m_comp + c_comp + d_comp + dl_comp, 1)
 
     return {
-        "package_name":        pkg["package_name"],
-        "risk_score":          score,
-        "risk_label":          _risk_label(score),
-        "trend_direction":     _trend(score, prev_scores.get(pkg["package_name"]),
-                                      version_changed),
+        "package_name":         pkg["package_name"],
+        "risk_score":           score,
+        "risk_label":           _risk_label(score),
+        "trend_direction":      _trend(score, prev_scores.get(pkg["package_name"]), version_changed),
         "component_maintainer": m_comp,
         "component_cve":        c_comp,
         "component_depth":      d_comp,
         "component_downloads":  dl_comp,
-        "blast_radius_count":  pkg["blast_radius_count"],
+        "blast_radius_count":   pkg["blast_radius_count"],
         "score_version":        SCORE_VERSION,
         "computed_at":          computed_at,
     }
 
-# ── BigQuery writes ───────────────────────────────────────────────────────── #
+# ── DuckDB + Parquet writes ───────────────────────────────────────────────── #
 
-def _write(rows: list[dict], table_ref: str, disposition: str) -> None:
-    table      = client.get_table(table_ref)
-    job_config = bigquery.LoadJobConfig(
-        write_disposition=disposition,
-        schema=table.schema,
+def _write_scores(conn, scored: list[dict]) -> None:
+    conn.execute("DELETE FROM desk_prod.fact_risk_scores")
+    insert_rows(conn, "desk_prod.fact_risk_scores", scored)
+    logger.info("wrote %d rows to fact_risk_scores", len(scored))
+
+
+def _append_parquet(path: Path, create_sql: str, insert_sql: str, rows: list) -> None:
+    if not rows:
+        return
+    conn_mem = duckdb.connect(":memory:")
+    try:
+        if path.exists():
+            conn_mem.execute(f"CREATE TABLE hist AS SELECT * FROM read_parquet(?)", [str(path)])
+        else:
+            conn_mem.execute(create_sql)
+            path.parent.mkdir(parents=True, exist_ok=True)
+        conn_mem.executemany(insert_sql, rows)
+        conn_mem.execute(f"COPY hist TO ? (FORMAT PARQUET)", [str(path)])
+    finally:
+        conn_mem.close()
+    logger.info("appended %d rows to %s", len(rows), path.name)
+
+
+def _append_score_history(scored: list[dict]) -> None:
+    _append_parquet(
+        HISTORY_PARQUET,
+        "CREATE TABLE hist (package_name VARCHAR, risk_score DOUBLE, score_version BIGINT, computed_at VARCHAR)",
+        "INSERT INTO hist VALUES (?, ?, ?, ?)",
+        [[r["package_name"], r["risk_score"], r["score_version"], r["computed_at"]] for r in scored],
     )
-    job = client.load_table_from_json(rows, table_ref, job_config=job_config)
-    job.result()
-    logger.info("wrote %d rows to %s (%s)", len(rows), table_ref.split(".")[-1], disposition)
+
+
+def _append_download_history(packages: list[dict]) -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+    _append_parquet(
+        DOWNLOAD_HISTORY_PARQUET,
+        "CREATE TABLE hist (package_name VARCHAR, monthly_downloads BIGINT, recorded_at DATE)",
+        "INSERT INTO hist VALUES (?, ?, ?)",
+        [[p["package_name"], p["monthly_downloads"], today]
+         for p in packages if p["monthly_downloads"] is not None],
+    )
 
 # ── Main ─────────────────────────────────────────────────────────────────── #
 
 def main() -> None:
-    logger.info("risk_score starting — version=%d project=%s", SCORE_VERSION, PROJECT_ID)
+    logger.info("risk_score starting — version=%d", SCORE_VERSION)
+    conn = get_connection()
 
-    ver_changed    = _version_changed()
-    packages       = _load_packages()
-    prev_scores    = _load_prev_scores()
-    prev_downloads = _load_prev_downloads()
-    computed_at    = datetime.now(timezone.utc).isoformat()
+    try:
+        ver_changed    = _version_changed()
+        packages       = _load_packages(conn)
+        prev_scores    = _load_prev_scores()
+        prev_downloads = _load_prev_downloads()
+        computed_at    = datetime.now(timezone.utc).isoformat()
 
-    if ver_changed:
-        logger.warning(
-            "RISK_SCORE_VERSION changed — all trend_direction values set to STABLE this run"
-        )
+        if ver_changed:
+            logger.warning(
+                "RISK_SCORE_VERSION changed — all trend_direction values set to STABLE this run"
+            )
 
-    scored = [
-        _score_package(pkg, prev_scores, prev_downloads, ver_changed, computed_at)
-        for pkg in packages
-    ]
+        scored = [
+            _score_package(pkg, prev_scores, prev_downloads, ver_changed, computed_at)
+            for pkg in packages
+        ]
 
-    label_counts = {}
-    for row in scored:
-        label_counts[row["risk_label"]] = label_counts.get(row["risk_label"], 0) + 1
-    logger.info("score distribution: %s", label_counts)
+        label_counts: dict[str, int] = {}
+        for row in scored:
+            label_counts[row["risk_label"]] = label_counts.get(row["risk_label"], 0) + 1
+        logger.info("score distribution: %s", label_counts)
 
-    _write(scored, _FACT_SCORES,   bigquery.WriteDisposition.WRITE_TRUNCATE)
-    _write(scored, _FACT_HISTORY,  bigquery.WriteDisposition.WRITE_APPEND)
+        _write_scores(conn, scored)
+        _append_score_history(scored)
+        _append_download_history(packages)
 
-    logger.info("risk_score complete — %d packages scored", len(scored))
+        logger.info("risk_score complete — %d packages scored", len(scored))
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 name: PyPI Event — New Version Check
 
 # Polls the PyPI RSS feed every hour.
-# Job 1 (detect): lightweight, no GCP auth — checks if a priority package was updated.
-# Job 2 (refresh): runs only when detect fires or on manual dispatch.
+# Job 1 (detect): lightweight, no auth — checks if a priority package was updated.
+# Job 2 (refresh): runs full pipeline when detect fires or on manual dispatch.
 # pypi_ingest.py skips packages whose version hasn't changed — the second line of defence.
 
 on:
@@ -39,7 +39,7 @@ jobs:
           PRIORITY = {
               "requests", "numpy", "pandas", "flask", "django", "fastapi", "pydantic",
               "sqlalchemy", "cryptography", "urllib3", "certifi", "setuptools", "pip",
-              "boto3", "google-cloud-bigquery", "pyarrow", "scikit-learn", "pillow",
+              "boto3", "pyarrow", "scikit-learn", "pillow",
               "tensorflow", "torch", "aiohttp", "httpx", "celery", "redis", "psycopg2",
               "pymongo", "click", "typer", "rich", "pytest", "black", "mypy", "ruff",
               "starlette", "uvicorn", "gunicorn", "paramiko", "grpcio", "protobuf",
@@ -87,17 +87,16 @@ jobs:
               f.write("triggered=false\n")
           PYEOF
 
-  # ── Job 2: run PyPI pipeline when a priority package was updated ────────── #
+  # ── Job 2: run full pipeline when a priority package was updated ─────────── #
   refresh:
     needs: detect
     if: needs.detect.outputs.triggered == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GCP_DATASET_RAW: desk_raw
-      GCP_DATASET_PROD: desk_prod
+      DESK_DB_PATH: data/desk.duckdb
+      GITHUB_TOKENS: '["${{ secrets.GH_TOKEN_1 }}"]'
       PYPI_TOP_N: "1000"
       RISK_SCORE_VERSION: "1"
       PYTHONPATH: ${{ github.workspace }}
@@ -116,13 +115,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Decode GCP service account key
-        run: |
-          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 -d > "$RUNNER_TEMP/gcp-key.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
-
       - name: Ingest — PyPI metadata
         run: python ingestion/pypi_ingest.py
+
+      - name: Ingest — GitHub maintainers
+        run: python ingestion/github_ingest.py
+
+      - name: Ingest — OSV CVEs
+        continue-on-error: true
+        run: python ingestion/osv_ingest.py
+
+      - name: Ingest — deps.dev dependency graph
+        run: python ingestion/deps_dev_ingest.py
 
       - name: Transform — dbt build (prod)
         run: dbt build --target prod --project-dir dbt --profiles-dir dbt
@@ -137,7 +141,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/data/
+          git add frontend/public/data/ data/history/
           git diff --staged --quiet || git commit -m "chore: event-triggered graph refresh [skip ci]"
           git pull --rebase origin main
           git push origin HEAD
+
+      - name: Deploy frontend to Vercel
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        working-directory: frontend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

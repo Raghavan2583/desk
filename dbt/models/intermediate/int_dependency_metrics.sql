@@ -8,7 +8,7 @@ WITH dep_edges AS (
     SELECT
         package_name,
         MAX(depth_level)        AS max_depth,
-        COUNTIF(is_direct)      AS direct_dep_count
+        COUNT(*) FILTER (WHERE is_direct) AS direct_dep_count
     FROM {{ ref('stg_deps_dependencies') }}
     GROUP BY package_name
 )

@@ -27,3 +27,10 @@ dbt/.user.yml
 .DS_Store
 Thumbs.db
 .vercel
+
+# DuckDB — ephemeral per pipeline run, never committed
+*.duckdb
+data/desk.duckdb
+
+# Parquet history files must NOT be gitignored (they are committed)
+# data/history/*.parquet — intentionally tracked

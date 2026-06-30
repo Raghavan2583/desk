@@ -13,17 +13,16 @@ Two-phase approach:
 Packages with no CVEs produce no rows — cve_component = 0 in risk scoring.
 
 Usage:
-    GCP_PROJECT_ID=<id> python ingestion/osv_ingest.py
+    DESK_DB_PATH=data/desk.duckdb python ingestion/osv_ingest.py
 """
 import json
 import logging
-import os
 import time
 from datetime import datetime, timezone
 
 import requests
-from google.cloud import bigquery
 
+from ingestion.db import get_connection, insert_rows
 from ingestion.utils.backoff import retry_with_backoff
 from ingestion.utils.queue import mark_complete, mark_error, mark_running
 from ingestion.utils.validation import validate_response
@@ -31,20 +30,11 @@ from ingestion.utils.validation import validate_response
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PROJECT_ID   = os.environ["GCP_PROJECT_ID"]
-DATASET_RAW  = os.environ.get("GCP_DATASET_RAW",  "desk_raw")
-DATASET_PROD = os.environ.get("GCP_DATASET_PROD", "desk_prod")
-
-client = bigquery.Client(project=PROJECT_ID)
-
-_RAW_TABLE   = f"{PROJECT_ID}.{DATASET_RAW}.raw_osv_cves"
-_QUEUE_TABLE = f"{PROJECT_ID}.{DATASET_PROD}.scheduler_queue"
-
 BATCH_SIZE        = 50
 OSV_BATCH_URL     = "https://api.osv.dev/v1/querybatch"
 OSV_VULN_BASE_URL = "https://api.osv.dev/v1/vulns"
-OSV_REQ_DELAY     = 0.2   # 5 req/s — safe rate for OSV's unauthenticated endpoint
-OSV_BATCH_DELAY   = 1.0   # pause between querybatch calls to avoid rate limits
+OSV_REQ_DELAY     = 0.2
+OSV_BATCH_DELAY   = 1.0
 
 OSV_BATCH_SCHEMA = {
     "type": "object",
@@ -52,7 +42,6 @@ OSV_BATCH_SCHEMA = {
     "properties": {"results": {"type": "array"}},
 }
 
-# OSV uses "MODERATE" for what NIST calls "MEDIUM".
 _SEVERITY_MAP = {
     "CRITICAL": "CRITICAL",
     "HIGH":     "HIGH",
@@ -84,7 +73,7 @@ def _parse_severity(vuln: dict) -> tuple[str | None, float | None]:
             cvss_score = float(raw_score)
             break
         except (ValueError, TypeError):
-            pass  # CVSS vector strings (e.g. "CVSS:3.1/AV:N/...") are not floats
+            pass
 
     if label is None and cvss_score is not None:
         for threshold, derived_label in _CVSS_THRESHOLDS:
@@ -149,10 +138,6 @@ def _fetch_vuln_details(
     vuln_ids: list[str],
     session: requests.Session,
 ) -> dict[str, dict]:
-    """
-    Fetches full vuln data for each unique ID. Rate-limited at OSV_REQ_DELAY seconds
-    between requests. Returns {vuln_id: full_vuln_dict}.
-    """
     cache: dict[str, dict] = {}
     total = len(vuln_ids)
     logger.info("fetching full data for %d unique CVE IDs", total)
@@ -175,89 +160,78 @@ def _fetch_vuln_details(
     logger.info("fetched %d/%d vuln details successfully", len(cache), total)
     return cache
 
-# ── Queue helper ──────────────────────────────────────────────────────────── #
-
-def _load_queue() -> list[str]:
-    query = f"SELECT package_name FROM `{_QUEUE_TABLE}` ORDER BY package_name"
-    return [row.package_name for row in client.query(query).result()]
-
 # ── Main ─────────────────────────────────────────────────────────────────── #
 
 def main() -> None:
-    logger.info("osv_ingest starting — project=%s", PROJECT_ID)
+    logger.info("osv_ingest starting")
+    conn = get_connection()
 
-    packages    = _load_queue()
-    ingested_at = datetime.now(timezone.utc).isoformat()
+    try:
+        packages    = [
+            row[0]
+            for row in conn.execute(
+                "SELECT package_name FROM desk_prod.scheduler_queue ORDER BY package_name"
+            ).fetchall()
+        ]
+        ingested_at = datetime.now(timezone.utc).isoformat()
 
-    mark_running(client, _QUEUE_TABLE, packages)
+        mark_running(conn, packages)
 
-    # Phase 1: collect (package_name, vuln_id) pairs via querybatch
-    pkg_vuln_pairs: list[tuple[str, str]] = []
-    completed: list[str] = []
-    no_cve_count = 0
+        pkg_vuln_pairs: list[tuple[str, str]] = []
+        completed: list[str] = []
+        no_cve_count = 0
 
-    with requests.Session() as session:
-        for start in range(0, len(packages), BATCH_SIZE):
-            batch = packages[start:start + BATCH_SIZE]
-            try:
-                results = _query_batch(batch, session)
-                if len(results) != len(batch):
-                    raise RuntimeError(
-                        "OSV results count mismatch: expected %d got %d"
-                        % (len(batch), len(results))
-                    )
-                for package_name, result in zip(batch, results):
-                    vulns = result.get("vulns") or []
-                    if not vulns:
-                        no_cve_count += 1
-                    else:
-                        for v in vulns:
-                            pkg_vuln_pairs.append((package_name, v["id"]))
-                    completed.append(package_name)
-            except Exception as exc:
-                logger.error("querybatch %d–%d failed: %s", start, start + len(batch) - 1, exc)
-                for package_name in batch:
-                    mark_error(client, _QUEUE_TABLE, package_name,
-                               str(exc), "last_osv_ingest_at")
-            time.sleep(OSV_BATCH_DELAY)
+        with requests.Session() as session:
+            for start in range(0, len(packages), BATCH_SIZE):
+                batch = packages[start:start + BATCH_SIZE]
+                try:
+                    results = _query_batch(batch, session)
+                    if len(results) != len(batch):
+                        raise RuntimeError(
+                            "OSV results count mismatch: expected %d got %d"
+                            % (len(batch), len(results))
+                        )
+                    for package_name, result in zip(batch, results):
+                        vulns = result.get("vulns") or []
+                        if not vulns:
+                            no_cve_count += 1
+                        else:
+                            for v in vulns:
+                                pkg_vuln_pairs.append((package_name, v["id"]))
+                        completed.append(package_name)
+                except Exception as exc:
+                    logger.error("querybatch %d–%d failed: %s", start, start + len(batch) - 1, exc)
+                    for package_name in batch:
+                        mark_error(conn, package_name, str(exc), "last_osv_ingest_at")
+                time.sleep(OSV_BATCH_DELAY)
+
+            logger.info(
+                "phase 1 complete — packages=%d no_cve=%d vuln_refs=%d",
+                len(packages), no_cve_count, len(pkg_vuln_pairs),
+            )
+
+            unique_ids   = list({vid for _, vid in pkg_vuln_pairs})
+            vuln_details = _fetch_vuln_details(unique_ids, session)
+
+        rows: list[dict] = []
+        for package_name, vuln_id in pkg_vuln_pairs:
+            full = vuln_details.get(vuln_id)
+            if full:
+                rows.append(_build_row(package_name, full, ingested_at))
+
+        if rows:
+            insert_rows(conn, "desk_raw.raw_osv_cves", rows)
+            logger.info("inserted %d CVE rows into raw_osv_cves", len(rows))
+
+        mark_complete(conn, completed, "last_osv_ingest_at")
 
         logger.info(
-            "phase 1 complete — packages=%d no_cve=%d vuln_refs=%d",
-            len(packages), no_cve_count, len(pkg_vuln_pairs),
+            "osv_ingest complete — cve_rows=%d unique_cves=%d no_cve=%d errors=%d",
+            len(rows), len(unique_ids), no_cve_count,
+            len(packages) - len(completed),
         )
-
-        # Phase 2: deduplicate IDs and fetch full vuln data
-        unique_ids   = list({vid for _, vid in pkg_vuln_pairs})
-        vuln_details = _fetch_vuln_details(unique_ids, session)
-
-    # Build rows using full vuln data
-    rows: list[dict] = []
-    for package_name, vuln_id in pkg_vuln_pairs:
-        full = vuln_details.get(vuln_id)
-        if full:
-            rows.append(_build_row(package_name, full, ingested_at))
-
-    if rows:
-        job = client.load_table_from_json(
-            rows,
-            _RAW_TABLE,
-            job_config=bigquery.LoadJobConfig(
-                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-                schema=client.get_table(_RAW_TABLE).schema,
-            ),
-        )
-        job.result()
-        if job.errors:
-            raise RuntimeError("BigQuery load failed: %s" % job.errors)
-        logger.info("inserted %d CVE rows into raw_osv_cves", len(rows))
-
-    mark_complete(client, _QUEUE_TABLE, completed, "last_osv_ingest_at")
-
-    logger.info(
-        "osv_ingest complete — cve_rows=%d unique_cves=%d no_cve=%d errors=%d",
-        len(rows), len(unique_ids), no_cve_count,
-        len(packages) - len(completed),
-    )
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

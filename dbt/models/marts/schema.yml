@@ -33,8 +33,7 @@ models:
 
 sources:
   - name: desk_prod_tests
-    database: "{{ env_var('GCP_PROJECT_ID') }}"
-    schema: "{{ env_var('GCP_DATASET_PROD', 'desk_prod') }}"
+    schema: desk_prod
     tables:
       - name: fact_risk_scores
         columns:

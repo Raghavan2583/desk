@@ -11,5 +11,5 @@ SELECT
     is_archived,
     is_fork,
     activity_label,
-    CURRENT_TIMESTAMP() AS last_updated_at
+    CURRENT_TIMESTAMP AS last_updated_at
 FROM {{ ref('stg_github_maintainers') }}

@@ -5,10 +5,10 @@
 
 SELECT
     package_name,
-    COUNTIF(severity = 'CRITICAL') AS critical_count,
-    COUNTIF(severity = 'HIGH')     AS high_count,
-    COUNTIF(severity = 'MEDIUM')   AS medium_count,
-    COUNTIF(severity = 'LOW')      AS low_count,
+    COUNT(*) FILTER (WHERE severity = 'CRITICAL') AS critical_count,
+    COUNT(*) FILTER (WHERE severity = 'HIGH')     AS high_count,
+    COUNT(*) FILTER (WHERE severity = 'MEDIUM')   AS medium_count,
+    COUNT(*) FILTER (WHERE severity = 'LOW')      AS low_count,
     COUNT(*)                        AS total_cve_count
 FROM {{ ref('stg_osv_cves') }}
 GROUP BY package_name

@@ -18,9 +18,7 @@ jobs:
     timeout-minutes: 60
 
     env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GCP_DATASET_RAW: desk_raw
-      GCP_DATASET_PROD: desk_prod
+      DESK_DB_PATH: data/desk.duckdb
       GITHUB_TOKENS: '["${{ secrets.GH_TOKEN_1 }}"]'
       PYPI_TOP_N: "1000"
       RISK_SCORE_VERSION: "1"
@@ -39,11 +37,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Decode GCP service account key
-        run: |
-          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 -d > "$RUNNER_TEMP/gcp-key.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
 
       - name: Ingest — PyPI metadata
         run: python ingestion/pypi_ingest.py
@@ -71,7 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/data/
+          git add frontend/public/data/ data/history/
           git diff --staged --quiet || git commit -m "chore: refresh graph data"
           git pull --rebase origin main
           git push origin HEAD
@@ -82,4 +75,3 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-

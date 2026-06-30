@@ -20,9 +20,9 @@ SELECT
     dependency_version_constraint,
     depth_level,
     (depth_level = 1) AS is_direct,
-    REGEXP_CONTAINS(
-        COALESCE(JSON_VALUE(raw_payload, '$.spec'), ''),
-        r';\s*extra\s*=='
+    regexp_matches(
+        COALESCE(json_extract_string(raw_payload, '$.spec'), ''),
+        ';\s*extra\s*=='
     ) AS is_optional
 FROM deduped
 WHERE rn = 1

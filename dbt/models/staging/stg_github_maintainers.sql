@@ -25,7 +25,7 @@ WITH deduped AS (
 with_days AS (
     SELECT
         *,
-        DATE_DIFF(CURRENT_DATE(), DATE(last_commit_at), DAY) AS days_since_last_commit
+        DATEDIFF('day', last_commit_at::DATE, CURRENT_DATE) AS days_since_last_commit
     FROM deduped
     WHERE rn = 1
 )
