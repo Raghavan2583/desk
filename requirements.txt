@@ -5,6 +5,7 @@
 duckdb>=1.0.0
 dbt-duckdb~=1.8.0
 pyarrow>=16.1.0
+pandas>=2.0.0
 
 # Increment 2-5 — Ingestion pipeline
 requests==2.32.3
