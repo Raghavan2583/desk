@@ -38,6 +38,14 @@ def _ts(value) -> str | None:
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
+def _nan(v):
+    # NaN is the only value not equal to itself
+    try:
+        return None if v != v else v
+    except TypeError:
+        return v
+
+
 def _df_rows(conn, query: str) -> list[dict]:
     """Execute query and return list of dicts with NaN replaced by None."""
     df = conn.execute(query).df()
@@ -152,7 +160,7 @@ def _load_trend_history() -> dict[str, list[dict]]:
     for row in rows:
         history.setdefault(row[0], []).append({
             "date":       row[1],
-            "risk_score": row[2],
+            "risk_score": _nan(row[2]),
         })
     logger.info("loaded trend history for %d packages", len(history))
     return history
@@ -298,7 +306,7 @@ def _build_package_json(
 
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, default=str), encoding="utf-8")
+    path.write_text(json.dumps(data, default=str, allow_nan=False), encoding="utf-8")
 
 # ── Main ─────────────────────────────────────────────────────────────────── #
 
