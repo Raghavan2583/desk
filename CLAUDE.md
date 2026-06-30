@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-05-20
+# Phase: Operate | Updated: 2026-06-30
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -37,13 +37,12 @@ Monitor     : schema_monitor.yml — Mondays 08:17 UTC
 Documentary : https://documentary-site-xi.vercel.app
 
 ## Last Session
-2026-05-20 — Pipeline deploy gap fixed (D055: bot push can't trigger deploy_frontend.yml —
-deploy step moved back into daily_refresh.yml). 8-episode documentary series written and
-deployed. GitHub native pipeline failure notifications configured.
+2026-06-30 — D057 complete. BigQuery → DuckDB + Parquet history migration built and deployed.
+3 pipeline runs to reach clean state (dbt-duckdb version pin, pandas missing from deps).
+Run 28459003731 — all 15 steps green. DESK live on DuckDB.
 
 ## Next Action
-DESK: stable. Pipeline deploy fixed. No pending changes.
-desk-deck: changes coming from Coach's boss review — resume when feedback arrives.
+Optional cleanup: delete GCP_PROJECT_ID + GCP_SERVICE_ACCOUNT_KEY from GitHub Settings → Secrets.
   Deck URL: https://desk-deck.vercel.app
   Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 
@@ -57,7 +56,7 @@ IN:
 - Risk score: numeric (x.x/10) + label (CRITICAL/HIGH/MEDIUM/LOW) + trend arrow
 - 5 outputs: blast radius graph, risk score card, maintainer card, 12-month trend line, blast radius count
 - Refresh: event-driven PyPI feed + 24hr GitHub maintainer check
-- Storage: BigQuery on GCP (Coach has existing account)
+- Storage: DuckDB (in-process, ephemeral per run) + Parquet history files committed to repo (D057)
 - Transform: dbt Core
 - Frontend: React + React Flow on Vercel (desktop only)
 - Skeleton built in: token rotation config, priority column, exponential backoff, GraphQL from day one
@@ -72,15 +71,15 @@ OUT (explicitly post-MVP):
 - Blast radius propagation ranking ("what breaks first" ordering)
 
 ## Increment Status (Develop phase)
-✓  1  BigQuery schema setup (create_schema.py)
-✓  2  PyPI ingestion (pypi_ingest.py, bootstrap.py, utils/)
+✓  1  DuckDB schema setup (ingestion/db.py — replaces BigQuery create_schema.py)
+✓  2  PyPI ingestion (pypi_ingest.py, self-seeds queue; bootstrap.py merged in)
 ✓  3  GitHub GraphQL ingestion (github_ingest.py)
 ✓  4  OSV CVE ingestion (osv_ingest.py)
 ✓  5  deps.dev ingestion (deps_dev_ingest.py)
 ✓  6  dbt staging models (5 SQL + project config)
 ✓  7  dbt intermediate models (3 SQL)
 ✓  8  dbt mart models + schema tests
-✓  9  Risk scoring (risk_score.py)
+✓  9  Risk scoring (risk_score.py) + Parquet history files
 ✓ 10  JSON export (graph_export.py)
 ✓ 11  React frontend (13 files — Vite + ReactFlow + dagre)
-   12  GitHub Actions workflows — NEXT
+✓ 12  GitHub Actions workflows (D057: DuckDB, no GCP secrets)

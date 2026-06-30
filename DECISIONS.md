@@ -1,285 +1,78 @@
 # DESK — Locked Decisions
 # Observer writes every new locked decision here immediately.
-# Rule: NEVER exceed 100 lines. One fact, one place. Rationale mandatory.
+# Rule: NEVER exceed 100 lines. One fact, one place.
 
-## D001 — Knowledge Graph over Dashboard
-DECISION: Model as a graph. Entities and relationships, not flat tables.
-RATIONALE: Chain of reasoning (package → maintainer → dependents → blast radius) is only possible with a graph. A dashboard shows facts. A graph reveals connections that create the insight. This is the core product differentiator.
-LOCKED: 2026-05-01
-
-## D002 — PyPI Only for MVP
-DECISION: Ingest Python ecosystem (PyPI) only for MVP. npm, Maven, NuGet — post-MVP one by one.
-RATIONALE: Python dominates DE/ML stacks at target companies (Swiggy, Razorpay, Zepto). Interviewers feel the impact immediately when searching pandas or fastapi. Depth over breadth wins the portfolio moment.
-LOCKED: 2026-05-01
-
-## D003 — Top 1,000 Packages for MVP
-DECISION: Pre-compute graph for top 1,000 PyPI packages by download count. Fetch on-demand beyond that.
-RATIONALE: Top 1,000 covers ~80% of real-world Python usage. Manageable within free tier. Expand to 10,000 post-MVP once pipeline is proven.
-LOCKED: 2026-05-01
-
-## D004 — BigQuery on GCP
-DECISION: BigQuery as primary storage and query layer.
-RATIONALE: Coach has existing GCP account. Free tier: 10GB storage + 1TB queries/month — sufficient for MVP. Native dbt Core support. No new account setup required.
-LOCKED: 2026-05-01
-
-## D005 — GitHub Actions as Scheduler and Runner
-DECISION: GitHub Actions for all scheduled pipeline runs and event-triggered updates.
-RATIONALE: Free tier (2,000 minutes/month). No additional infrastructure. Secrets management built in. Sufficient for MVP refresh frequency.
-LOCKED: 2026-05-01
-
-## D006 — dbt Core for Transformations
-DECISION: dbt Core (open source) for all BigQuery transformations.
-RATIONALE: Free. Industry standard for DE portfolios. Runs on GitHub Actions. Native BigQuery adapter. Schema tests built in.
-LOCKED: 2026-05-01
-
-## D007 — React + React Flow for Frontend
-DECISION: React with React Flow library for graph visualization.
-RATIONALE: React Flow is purpose-built for node-graph visualization. Free, well-maintained, professional output without heavy customisation. Coach confirmed this choice.
-LOCKED: 2026-05-01
-
-## D008 — Vercel for Frontend Hosting
-DECISION: Vercel free tier for React frontend hosting.
-RATIONALE: Always on, no cold starts, free tier sufficient for portfolio project. Static JSON graph export removes any server dependency.
-LOCKED: 2026-05-01
-
-## D009 — GitHub GraphQL API from Day One
-DECISION: Use GitHub GraphQL API for all maintainer data. Never REST for bulk operations.
-RATIONALE: GraphQL allows batching multiple repo queries in one API call. REST requires one call per repo. At 1,000 packages this matters immediately. Future-proof for 10,000 package expansion without pipeline rewrite.
-LOCKED: 2026-05-01
-
-## D010 — 24-Hour GitHub Maintainer Refresh
-DECISION: Check GitHub maintainer activity every 24 hours for all watched packages.
-RATIONALE: No event feed exists for arbitrary GitHub repos. Predictable and simple for MVP. Optimise to priority-based refresh post-MVP using the priority column skeleton already in schema.
-LOCKED: 2026-05-01
-
-## D011 — Risk Score Format: Label + Numeric + Trend
-DECISION: Display risk as label (CRITICAL/HIGH/MEDIUM/LOW) prominently, numeric score (x.x/10) underneath small, trend arrow (rising/falling/stable) alongside.
-RATIONALE: Label for leaders — quick read. Number for engineers — comparison and precision. Trend for 2026 — direction matters more than static state. All three serve different users in one view.
-LOCKED: 2026-05-01
-
-## D012 — Risk Score Formula (MVP v1)
-DECISION: Score = maintainer activity (40%) + CVE count (30%) + dependency depth (20%) + download trend (10%).
-RATIONALE: Weighted toward human risk (maintainer) because that is the unsolved gap others ignore. CVEs alone are already tracked by Snyk and others. Trend included as signal of ecosystem health.
-LOCKED: 2026-05-01
-
-## D013 — MVP Skeleton for Future Scale
-DECISION: Wire skeleton for token rotation, priority queue, and exponential backoff from day one. Full implementation post-MVP.
-DETAIL: Token config accepts array (MVP uses index 0). Scheduler table has priority column (MVP sets all to 1). Backoff built fully in MVP. GraphQL used from day one.
-RATIONALE: Retrofitting these post-MVP requires pipeline rewrite. Skeleton costs near zero now. Saves significant rework at 10,000 packages.
-LOCKED: 2026-05-01
-
-## D014 — Exponential Backoff Built Fully in MVP
-DECISION: Exponential backoff on all API calls built fully in MVP — not as a skeleton.
-RATIONALE: Without backoff, any rate limit or transient API failure crashes the pipeline. 10 lines of code. No reason to defer. Pipeline must be robust from first run.
-LOCKED: 2026-05-01
-
-## D015 — Schema Validation at Ingestion Boundary
-DECISION: Each ingestion script validates the API response against a minimal jsonschema before parsing or writing to BigQuery. On ValidationError: log the exact field path, raise the exception to fail the GitHub Actions step.
-RATIONALE: Silent schema drift (upstream API renames or removes a field) would write NULL or wrong data with no alert. Minimal schema pattern means upstream can add fields freely without breaking us — we only guard fields we extract. raw_payload already protects historical re-processing. This guards the current run.
-ALERT MECHANISM: GitHub Actions workflow failure triggers email to repo owner by default. No additional tooling needed.
-LOCKED: 2026-05-04
-
-## D016 — Bootstrap Source: hugovk/top-pypi-packages
-DECISION: bootstrap.py fetches top-N packages from hugovk/top-pypi-packages JSON endpoint, not bigquery-public-data.pypi.file_downloads.
-RATIONALE: BQ public dataset query scans 200-400GB per run, exceeding free-tier scan quota on new projects. hugovk provides same top-N list via a lightweight JSON endpoint updated monthly. No scan cost, no billing dependency.
-LOCKED: 2026-05-05
-
-## D017 — Ingestion Writes: Load Jobs Only
-DECISION: All ingestion scripts use client.load_table_from_json() (batch load job), never client.insert_rows_json() (streaming insert).
-RATIONALE: Streaming inserts are blocked in BigQuery free tier. For large raw_payload rows (50-200KB per package), streaming insert requests exceed the 10MB per-request limit and hang indefinitely. Load jobs have no size limit, commit immediately (enabling same-run DML), and are free on any billing tier.
-LOCKED: 2026-05-05
-
-## D018 — Dependency Data Source: requires_dist (not deps.dev)
-DECISION: deps_dev_ingest.py parses requires_dist from raw_pypi_packages to build dependency edges and blast radius counts. deps.dev v3alpha is no longer used.
-RATIONALE: deps.dev v3alpha removed /dependencies endpoint (404 for all PyPI packages) and removed dependentCount from the package endpoint. requires_dist is already in raw_pypi_packages, requires no external API, and produces correct dependency edges within the top-1000 set.
-LOCKED: 2026-05-05
-
-## D019 — OSV Ingestion: Two-Phase Fetch + MODERATE→MEDIUM Mapping
-DECISION: Phase 1 querybatch collects {id, modified} per vuln (minimal data). Phase 2 fetches GET /v1/vulns/{id} per unique ID for full data including severity. Rate-limited at 5 req/s. OSV label "MODERATE" mapped to "MEDIUM" in scoring.
-RATIONALE: querybatch returns summary data only — severity and CVSS are absent. Individual vuln lookups return full data. Deduplication across packages reduces requests from N×vulns to unique_vulns only. OSV uses "MODERATE" where NIST uses "MEDIUM" — without mapping, all MODERATE CVEs scored as 0.
-LOCKED: 2026-05-05
-
-## D020 — GitHub Batch Fault Tolerance: Per-Package Exception Isolation
-DECISION: _execute_batch in github_ingest.py wraps per-package validation in try/except. One schema failure skips that package only — does not abort the remaining repos in the batch.
-RATIONALE: Previous design lost all 50 packages in a batch when any single repo caused a ValidationError. Real-world GitHub repos have edge cases (archived, forked, unusual fields) that should not penalise all co-processed packages.
-LOCKED: 2026-05-05
-
-## D021 — Proactive API Schema Monitoring
-DECISION: schema_monitor.yml runs weekly (Mondays 08:17 UTC). scripts/schema_health_check.py makes lightweight test calls to all upstream APIs (PyPI, OSV querybatch, OSV vuln detail, deps.dev, hugovk) and validates minimal expected fields. Fails loudly on schema drift.
-RATIONALE: D015 is reactive (detects drift only during pipeline runs). Proactive monitoring catches API changes within 7 days regardless of pipeline schedule, giving time to fix before data quality degrades.
-LOCKED: 2026-05-05
-
-## D022 — PackageNode: Card Style
-DECISION: PackageNode renders as a dark rounded-rectangle card (160×64px) containing risk label badge, score, trend arrow, and blast radius count. Edges use smoothstep type; focused-package edges are animated.
-RATIONALE: Circle nodes with external labels were hard to read at scale. Card nodes expose key data directly without requiring hover, match React Flow's standard design language, and are easier to scan in a dense graph.
-LOCKED: 2026-05-05
-
-## D024 — Three-Column Graph Layout Replaces Dagre
-DECISION: Graph explore view uses manual three-column positioning: dependencies LEFT, focal CENTER, dependents RIGHT. All edges flow left→right. Dagre LR removed for this view.
-RATIONALE: Dagre LR does a full topological sort across all edges in graph.json — the focal node lands in a rank determined by graph topology, not user intent. Manual layout guarantees focal is always centered. Position communicates role without a legend. User testing confirmed dagre output was unreadable for non-technical users.
-LOCKED: 2026-05-05
-
-## D025 — Only Focal-Touching Edges Rendered
-DECISION: getVisibleSubgraph renders only edges where the focal node is source or target. Cross-edges between two neighbor nodes are excluded.
-RATIONALE: Showing all edges between visible nodes (previous behaviour) created spaghetti — if A and B are both neighbors of focal, and A→B exists in the graph, that edge appeared. It was irrelevant to the user's search and added visual noise. Pure star/hub topology from the focal is the correct model for one-package exploration.
-LOCKED: 2026-05-05
-
-## D026 — Optional Extras Filtering: Post-MVP
-DECISION: requires_dist lines containing `; extra ==` are not filtered in the current MVP. Post-MVP: pypi_ingest.py flags is_optional=TRUE, graph_export.py excludes them from edges.
-RATIONALE: The gap was discovered during real user testing (2026-05-05). Fixing it requires ingestion change + pipeline re-run + graph re-export. Not blocking for MVP demo if demo uses safe packages (requests, numpy, django, flask). Risk accepted.
-LOCKED: 2026-05-05
-
-## D027 — Vercel Deployment: Manual CLI, Not Git Integration
-DECISION: Vercel production deployment requires `vercel deploy --prod` from frontend/ directory. Git push to main does NOT trigger Vercel auto-deploy.
-RATIONALE: The frontend Vercel project (prj_lkBSMfh5CXDvE1idq81fLyz5lte4) was linked via CLI (frontend/.vercel/project.json), not GitHub integration. There is no GitHub→Vercel webhook configured. This is intentional for now — post-MVP, connect GitHub integration to automate.
-LOCKED: 2026-05-05
-
-## D028 — Optional Extras Filtering: Implemented (Supersedes D026)
-DECISION: requires_dist lines containing `; extra ==` are classified as is_optional=TRUE in stg_deps_dependencies via REGEXP_CONTAINS on raw_payload spec string. graph_export.py filters AND NOT COALESCE(is_optional, FALSE) on both edge queries. deps_dev_ingest skips optional deps when counting blast_radius.
-RATIONALE: 53% of all requires_dist edges in the top-1000 were optional extras — inflating blast_radius counts and showing false dependencies (e.g. hypothesis → numpy/pandas/django). Fix works on all existing data via raw_payload without schema migration or re-ingestion.
-LOCKED: 2026-05-06
-
-## D029 — OSV Ingest Resilience
-DECISION: BATCH_SIZE=50, timeout=(5,10) connect/read tuple, max_retries=3 on querybatch calls. OSV_BATCH_DELAY=1.0s between batches. continue-on-error: true on OSV step in workflow.
-RATIONALE: OSV.dev exhibits body-stall: sends HTTP headers then stalls on response body, defeating single-value timeouts. Tuple timeout enforces 10s maximum between any two bytes on the body. Pipeline must not be blocked by one flaky external API — continue-on-error ensures dbt/scoring/export run regardless.
-LOCKED: 2026-05-06
-
-## D030 — GitHub Ingest Timeout Tuple
-DECISION: timeout=(5,10) connect/read tuple on GitHub GraphQL POST in github_ingest.py.
-RATIONALE: Same body-stall pattern as OSV.dev — GraphQL endpoint sends headers then stalls under load. Single timeout=60 was holding the socket open indefinitely.
-LOCKED: 2026-05-06
-
-## D031 — Workflow Commit Step: Rebase Before Push
-DECISION: daily_refresh.yml commit step runs git pull --rebase origin main before git push to handle concurrent commits to main.
-RATIONALE: Code fixes pushed to main while pipeline runs caused the data commit to be rejected as non-fast-forward. Rebase ensures the graph data commit always lands on top of latest main cleanly.
-LOCKED: 2026-05-06
-
-## D032 — GitHub GraphQL Batch Size Reduction
-DECISION: BATCH_SIZE reduced from 50 to 20. INTER_BATCH_SLEEP=2s added. "Resource limits exceeded" in GraphQL response body now raises RuntimeError (was logged as warning).
-RATIONALE: At 50 repos/query, GitHub's server-side node complexity limit triggered silently — HTTP 200 with errors field, no data written. 762/900 packages had null maintainer rows. At 20, all 888 eligible packages indexed.
-LOCKED: 2026-05-07
-
-## D033 — Vercel Auto-Deploy via Workflow Step (Supersedes D027)
-DECISION: daily_refresh.yml runs `npx vercel deploy --prod` as its final step using VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID secrets. [skip ci] removed from refresh commit message.
-RATIONALE: [skip ci] blocked Vercel deployments (Vercel treats it as a skip signal). GitHub integration was never configured — Vercel was never auto-deploying. Workflow step deploys only when pipeline produces real data, not on every code commit. More precise than GitHub integration.
-LOCKED: 2026-05-07
-
-## D034 — pypi_event_trigger Concurrency and Rebase
-DECISION: pypi_event_trigger.yml joins the desk-pipeline concurrency group (cancel-in-progress: false) and adds git pull --rebase before push.
-RATIONALE: Without a shared concurrency group, pypi_event_trigger raced daily_refresh on git push — both write to frontend/public/data/. The rebase fix (D031) was applied to daily_refresh but not pypi_event_trigger.
-LOCKED: 2026-05-07
-
-## D035 — Vertical Graph Layout (Supersedes D024)
-DECISION: Graph explore view uses vertical three-row positioning: dependencies TOP, focal MIDDLE, dependents BOTTOM. Arrows flow top→bottom. PackageNode handles moved to Top/Bottom.
-RATIONALE: Horizontal three-column layout placed depends-on and used-by side by side, which felt arbitrary. Vertical hierarchy communicates the dependency chain (upstream → package → downstream) in the natural reading direction. Boss confirmed the vertical layout gives a better "big picture" view.
-LOCKED: 2026-05-07
-
-## D036 — Home Page as Risk Dashboard
-DECISION: Home page replaced with a risk dashboard: blast radius leaderboard (top 10 by downstream impact), ecosystem health ring (SVG donut showing CRITICAL/HIGH/MEDIUM/LOW split), stats strip (packages tracked / critical count / daily refresh). graph.json pre-warmed on mount.
-RATIONALE: Empty search box gave no value before interaction. Dashboard communicates the tool's core insight immediately — before the user types anything. Leaderboard tiles are clickable, making the home page an entry point to the graph, not just a search gateway.
-LOCKED: 2026-05-07
-
-## D037 — DEpendency riSK Brand Identity
-DECISION: DE=#58A6FF (accent blue), SK=#FF8C00 (orange) with glow, applied to all DESK wordmarks across home page hero and top bar. Full name formatted as DEpendency riSK with DE/SK coloured.
-RATIONALE: Acronym is not obvious from "DESK" alone. Colour-coding the source letters (DE from DEpendency, SK from riSK) communicates the name's origin instantly. Consistent across surfaces for brand recognition.
-LOCKED: 2026-05-07
-
-## D038 — Orbital Hero Animation
-DECISION: Home page hero uses a pure CSS @keyframes orbital animation: 3 rings (blue r=80, orange r=134, green r=192), glowing nodes, pulsing ambient core glow. Decorative only — no interaction, no data binding.
-RATIONALE: Static text hero had no visual impact. Cosmic orbital animation matches DESK's network/graph metaphor — nodes orbiting a center mirrors the dependency graph concept. Pure CSS (no canvas, no library) keeps bundle size unchanged.
-LOCKED: 2026-05-07
-
-## D039 — Brand Identity Updated (Supersedes D037)
-DECISION: DE=#3FB950 (green), SK=#E63946 (red). Applied to wordmark, hero, all surfaces.
-RATIONALE: Previous DE=blue/SK=orange lacked contrast against navy background. Green/red matches ecosystem health semantics (safe/risk) and reads clearly on #0D1117.
-LOCKED: 2026-05-10
-
-## D040 — Unified Navy Theme
-DECISION: C.bg=#0D1117 (GitHub standard dark navy) across all pages — home, explore, top bar, leaderboard gutters.
-RATIONALE: Warm charcoal #1A1614 clashed with the graph canvas. Navy is the industry standard (GitHub, Linear, Vercel dashboards) and eliminates the seam between home and explore views.
-LOCKED: 2026-05-10
-
-## D041 — Graph Explore Scroll Reveal
-DECISION: Explore mode uses sticky graph (zooms out + fades on scroll) with risk panel rising from below — same mechanic as home leaderboard. zoomOnScroll=false on ReactFlow lets mouse wheel scroll the page.
-RATIONALE: Side-by-side panel wasted screen space and hid the graph context. Scroll reveal gives full-screen graph first, then full-width risk analysis — better information hierarchy.
-LOCKED: 2026-05-10
-
-## D042 — ReactFlow Background Fix
-DECISION: index.css `.react-flow__background` set to `background: transparent`. ReactFlow background colour controlled exclusively via `style={{ background: '...' }}` prop on the ReactFlow component.
-RATIONALE: The CSS class override silently painted the canvas regardless of any inline style set in React. This caused every background change attempt to fail. Transparent is the correct default — the React prop controls the colour.
-LOCKED: 2026-05-10
-
-## D043 — Risk Driver Banner: Data-Driven, Not Prescriptive
-DECISION: Package detail card shows a `getPrimaryRiskDriver()` computed sentence (e.g. "2 critical vulnerabilities with no patch released yet") instead of a static action label (e.g. "Update Recommended"). Banner hidden if no meaningful signal.
-RATIONALE: Prescriptive labels without supporting data (version to update to, alternative package) erode trust. The function reads actual CVEs, maintainer state, trend history, blast radius and returns only what the data supports.
-LOCKED: 2026-05-12
-
-## D044 — Tooltip: position fixed + getBoundingClientRect
-DECISION: Tooltip component uses `position: fixed` with coordinates from `getBoundingClientRect()` on the trigger element.
-RATIONALE: `position: absolute` tooltips are clipped by `overflowY: auto` scroll containers (the explore view's outer div). Fixed positioning is viewport-relative — cannot be clipped by any parent regardless of overflow or stacking context.
-LOCKED: 2026-05-12
-
-## D045 — URL Routing: ?pkg= Deep Links
-DECISION: Viewing a package writes `?pkg=name` to the URL via `window.history.replaceState`. On mount, the URL param is read and that package is loaded automatically.
-RATIONALE: Enables share/copy link button to produce a URL that lands on the correct package. No router library required — native History API sufficient.
-LOCKED: 2026-05-12
-
-## D046 — Pipeline Schedule Drift: Accepted
-DECISION: GitHub Actions scheduled runs fire 3-4 hours after the configured 02:07 UTC cron time on low-activity repos. No fix applied.
-RATIONALE: GitHub delays scheduled jobs in a global queue, prioritising high-activity repos. The data still refreshes daily — the exact hour is irrelevant for a risk intelligence tool showing week-over-week trends.
-LOCKED: 2026-05-12
-
-## D047 — Pencil.dev as Global Design Tool
-DECISION: Pencil.dev (https://www.pencil.dev/) is the standard design tool for all projects with a frontend UI. MCP server configured globally in ~/.claude/mcp.json. Fallback: Figma if Pencil.dev pricing becomes unreasonable post-early-access.
-RATIONALE: Boss direction. Pencil.dev is IDE-native, React-aware, currently free in early access. Closes the gap between verbal design descriptions and actual UI output. Exit strategy documented upfront to avoid lock-in.
-LOCKED: 2026-05-12
-
-## D048 — CVE Panel: Version-Aware Remediation
-DECISION: CVE section shows a computed safe version (highest fixed_in_version across all CVEs via semver compare), a breathing white SAFE VERSION badge, and splits CVEs into patched (→ vX.X.X in green) and unpatched (no fix yet in red) groups. Risk driver banner uses one-word label chip: UPGRADE / CRITICAL / MONITOR / ABANDONED / STALE / RISING / EXPOSURE.
-RATIONALE: Raw CVE counts cause alert fatigue. Developers need the safe version to upgrade to, not a number. Data was already present in fixed_in_version — surfacing it required no new data sources.
-LOCKED: 2026-05-12
-
-## D049 — Homepage Wordmark Colors: Indigo + Rose (Supersedes D039)
-DECISION: DE_COLOR=#818CF8 (indigo), SK_COLOR=#F472B6 (rose/pink). Applied to wordmark, orbital, hero. Critical risk stat always uses #E63946 (red) regardless of brand colors.
-RATIONALE: Green+red (D039) felt generic. Indigo+rose is distinctive, works on dark backgrounds, feels premium. Critical risk stays red because it is a semantic color (danger), not a brand color.
-LOCKED: 2026-05-12
-
-## D050 — UPGRADE + SAFE VERSION Merged Split Box
-DECISION: When riskDriver is UPGRADE and a safe version exists, the top banner and the safe version badge below CVEs are replaced by a single split box: white outer border + white breathing glow, left half red-tinted with red UPGRADE badge, right half emerald-tinted with green SAFE VERSION badge and version number. All other risk driver types (CRITICAL, ABANDONED, STALE, etc.) retain single-box layout unchanged.
-RATIONALE: Two separate boxes for the same "upgrade available" signal was redundant and visually fragmented. One split box communicates both pieces of information — the action (UPGRADE) and the target (SAFE VERSION) — in a single glanceable unit.
-LOCKED: 2026-05-12
-
-## D051 — Score Modal: Per-Factor Component Breakdown
-DECISION: ScoreModal receives `components` (cve, maintainer, depth, downloads) and `risk_score` from packageData. Each factor row shows its actual pts contribution, a thin color-matched progress bar (fraction of total score), and a Total score row at the bottom.
-RATIONALE: The previous modal showed only static weights (50%, 20%, etc.) with no connection to the specific package's score. Users asked "how do we get 4.3?" — the breakdown makes the derivation transparent and builds trust in the scoring model.
-LOCKED: 2026-05-12
-
-## D052 — TL;DR Summary Panel: Template-Based, DE/SK Colors
-DECISION: A 3-sentence summary panel sits above Depends on/Used by. Left side: ecosystem reach + CVE state + verdict (indigo #818CF8 for verdict line). Right side: plain-English conclusion sentence in peach (#FFAD93). Left border: DE_COLOR (#818CF8). Right border: SK_COLOR (#F472B6). Generated purely from existing packageData fields — no API calls, no backend changes.
-RATIONALE: Most users don't interact with the 5 detail sections. A summary panel above the fold gives the key takeaway — what a security analyst would say after reviewing the data — before the user scrolls. Template approach is zero-cost and ships immediately.
-LOCKED: 2026-05-12
-
-## D053 — desk-deck: LinkedIn Portfolio Presentation
-DECISION: desk-deck is a standalone Vite+React presentation deployed at https://desk-deck.vercel.app. Tech: Framer Motion (transitions), ReactFlow (architecture diagrams, interaction fully disabled), 6 webp character images. 10 slides: hook → institution stat → danger → gap → reveal → arch×3 → proof → closing. No GitHub remote yet — create when Coach decides to make it public.
-RATIONALE: Boss recommended adding a Vercel-hosted deck to LinkedIn for product company job search. Self-contained deck with no presenter needed — evidence, architecture, and product proof built into the slides.
-LOCKED: 2026-05-14
-
-## D054 — Auto-Deploy via deploy_frontend.yml (Supersedes D033)
-DECISION: deploy_frontend.yml triggers on every push to main that touches frontend/** paths. daily_refresh.yml no longer has a Deploy to Vercel step. Manual `vercel --prod` is retired — `git push` is the only deploy action.
-RATIONALE: Manual deploys from local branches that diverged from main overwrote fresh pipeline data. Centralising deployment into a push-triggered workflow means pipeline data commits and code change commits both deploy through the same path — no divergence possible.
-LOCKED: 2026-05-15
-
-## D055 — daily_refresh.yml Deploys Frontend Directly (Supersedes D054)
-DECISION: daily_refresh.yml includes a `Deploy frontend to Vercel` step (npx vercel deploy --prod) after the git data commit. deploy_frontend.yml is retained for code-change deploys only.
-RATIONALE: GitHub Actions does not trigger push-based workflows from commits made by github-actions[bot] — a security rule to prevent infinite loops. With D054's architecture (deploy_frontend.yml triggered by push), bot data commits never triggered deployment. Site showed May 15 data indefinitely. Fix: deploy inside the same job as the data commit. No external trigger required.
-LOCKED: 2026-05-20
-
-## D056 — Documentary Series + Site
-DECISION: 8-episode documentary series written to desk/documentary/. Standalone Vite+React reading site built at desk/documentary-site/ and deployed at https://documentary-site-xi.vercel.app. Markdown files bundled into the site via Vite ?raw imports.
-RATIONALE: Coach requested a shareable record of the full project journey — for personal archive, boss review, and public sharing. Series covers: problem, design decisions, 4 API battles, dbt + scoring, 12 bugs, frontend evolution, CI/CD failures, and honest retrospective. Written without AI attribution — documents the engineering journey as Coach's own work.
-LOCKED: 2026-05-20
-
-## D023 — GitHub URL Search Fallback in pypi_ingest
-DECISION: When _extract_github_url returns None, pypi_ingest calls GitHub Search API (search/repositories) to find the repo. Discovered URL is written into the raw_pypi_packages row — persists through dbt to dim_packages without schema changes. Rate-limited at 2.1s/req. Aborts on first 429/403.
-RATIONALE: Some packages list their GitHub repo under non-standard project_urls keys or omit it entirely from PyPI metadata. Search API finds the authoritative repo by name. Writing to raw_pypi_packages ensures the URL flows through dbt automatically on the same run.
-LOCKED: 2026-05-05
+## Foundational Architecture — D001–D014 | Locked 2026-05-01
+Graph model over dashboard (D001). PyPI only, top 1,000 pre-computed (D002, D003). GitHub Actions + dbt Core + React + ReactFlow + Vercel free tier (D005–D008). GitHub GraphQL for maintainer data, 24hr refresh (D009, D010). Risk = CRITICAL/HIGH/MEDIUM/LOW + x.x/10 + trend arrow (D011). Score weights: maintainer 40%, CVE 30%, depth 20%, trend 10% (D012). Token rotation, priority queue, backoff built from day one (D013, D014). D004/BigQuery superseded by D057.
+## D015 | Schema Validation at Ingestion Boundary | 2026-05-04
+jsonschema validates API response before parsing; ValidationError fails GHA step + logs field path. Silent drift would write NULL with no alert.
+## D016 | Bootstrap: hugovk/top-pypi-packages | 2026-05-05
+JSON endpoint, not BQ public dataset. BQ public scans 200-400GB per run; exceeds free-tier quota.
+## D017 | Ingestion: Load Jobs Only | 2026-05-05
+client.load_table_from_json() only — no streaming inserts. Streaming blocked on free tier; load jobs unlimited + free + immediate commit.
+## D018 | Dependency Data: requires_dist | 2026-05-05
+Parse requires_dist from raw_pypi_packages. deps.dev v3alpha removed /dependencies endpoint (404 on all PyPI packages).
+## D019 | OSV: Two-Phase Fetch + MODERATE→MEDIUM | 2026-05-05
+Phase 1 querybatch for IDs; Phase 2 GET per unique ID for severity. Map MODERATE→MEDIUM (OSV/NIST labels diverge).
+## D020 | GitHub Batch Fault Tolerance | 2026-05-05
+Per-package try/except in _execute_batch — one failure skips that package only. Previous design lost all 50 in batch on any single error.
+## D021 | Proactive Schema Monitor | 2026-05-05
+schema_monitor.yml weekly (Mon 08:17 UTC) tests all upstream APIs. D015 only catches drift during pipeline runs; weekly gives days to fix.
+## D022 | PackageNode: Card Style | 2026-05-05
+160×64px dark rounded-rectangle: risk badge + score + trend + blast count. Smoothstep edges; focal edges animated.
+## D023 | GitHub URL Search Fallback | 2026-05-05
+pypi_ingest calls GitHub Search API when _extract_github_url fails (rate-limited 2.1s/req). Some packages omit GitHub URL from PyPI metadata.
+## D025 | Focal-Touching Edges Only | 2026-05-05
+getVisibleSubgraph renders only edges where focal is source or target. Cross-neighbor edges create spaghetti.
+## D028 | Optional Extras Filter [supersedes D026] | 2026-05-06
+requires_dist lines with '; extra ==' → is_optional=TRUE in stg_deps; graph_export.py filters from edge queries. 53% of edges were optional extras, inflating blast_radius.
+## D029 | OSV Ingest Resilience | 2026-05-06
+BATCH_SIZE=50, timeout=(5,10), max_retries=3, 1s inter-batch delay, continue-on-error: true. OSV body-stall pattern; pipeline must not block on one flaky API.
+## D030 | GitHub Ingest Timeout Tuple | 2026-05-06
+timeout=(5,10) on GitHub GraphQL POST. Same body-stall as OSV; single timeout=60 held socket indefinitely.
+## D031 | Rebase Before Push | 2026-05-06
+daily_refresh.yml: git pull --rebase origin main before git push. Concurrent pushes caused non-fast-forward rejection.
+## D032 | GraphQL BATCH_SIZE 50→20 | 2026-05-07
+BATCH_SIZE=20, INTER_BATCH_SLEEP=2s; resource limit error now raises RuntimeError. At 50, server silently returned no data for 762/900 packages.
+## D034 | pypi_event_trigger Concurrency Fix | 2026-05-07
+Joins desk-pipeline concurrency group (cancel-in-progress: false) + rebase before push. Race condition with daily_refresh on git push.
+## D035 | Vertical Graph Layout [supersedes D024] | 2026-05-07
+Dependencies TOP, focal MIDDLE, dependents BOTTOM. Horizontal layout felt arbitrary; vertical communicates dependency chain naturally.
+## D036 | Home Page Risk Dashboard | 2026-05-07
+Blast radius leaderboard (top 10) + health ring (SVG donut) + stats strip. graph.json pre-warmed on mount. Empty search gave no value before interaction.
+## D038 | Orbital Hero Animation | 2026-05-07
+Pure CSS @keyframes: 3 rings + glowing nodes + pulsing core. No interaction, no bundle impact. Mirrors dependency graph concept.
+## D040 | Unified Navy Theme | 2026-05-10
+C.bg=#0D1117 across all pages (home, explore, top bar, gutters). Warm charcoal clashed with graph canvas; navy is industry standard.
+## D041 | Scroll Reveal: Graph + Risk Panel | 2026-05-10
+Sticky graph (zooms out + fades on scroll), risk panel rises from below. zoomOnScroll=false lets wheel scroll page. Side-by-side wasted space.
+## D042 | ReactFlow Background Fix | 2026-05-10
+.react-flow__background { background: transparent }. CSS class override painted canvas regardless of inline style prop.
+## D043 | Risk Driver Banner: Data-Driven | 2026-05-12
+getPrimaryRiskDriver() computes sentence from CVEs, maintainer state, trend, blast radius — no static labels. Static labels without data erode trust.
+## D044 | Tooltip: position fixed | 2026-05-12
+position:fixed + getBoundingClientRect. position:absolute clipped by overflowY:auto scroll containers.
+## D045 | URL Routing: ?pkg= Deep Links | 2026-05-12
+window.history.replaceState writes ?pkg=name; on mount reads param to auto-load package. No router library needed.
+## D046 | Pipeline Schedule Drift: Accepted | 2026-05-12
+GHA fires 3-4hr late on low-activity repos. No fix — exact hour irrelevant for risk tool showing week-over-week trends.
+## D047 | Pencil.dev as Global Design Tool | 2026-05-12
+Standard for all frontend projects. MCP in ~/.claude/mcp.json. Fallback: Figma if pricing changes.
+## D048 | CVE Panel: Version-Aware Remediation | 2026-05-12
+Safe version (highest fixed_in_version via semver), patched/unpatched split, one-word risk chip. CVE counts alone cause alert fatigue.
+## D049 | Brand Identity: Indigo + Rose [supersedes D037, D039] | 2026-05-12
+DE_COLOR=#818CF8 (indigo), SK_COLOR=#F472B6 (rose). Critical risk stays #E63946 (semantic). Distinctive on dark backgrounds.
+## D050 | UPGRADE + SAFE VERSION Split Box | 2026-05-12
+When riskDriver=UPGRADE + safe version: single split box (red left/UPGRADE, emerald right/SAFE VERSION). Two boxes for one signal was redundant.
+## D051 | Score Modal: Per-Factor Breakdown | 2026-05-12
+ScoreModal shows actual pts contribution + color-matched progress bar + total row. Static weights showed no connection to specific package score.
+## D052 | TL;DR Summary Panel | 2026-05-12
+3-sentence template above Depends on/Used by. DE_COLOR left border, SK_COLOR right border, peach conclusion. Zero API calls.
+## D053 | desk-deck: Portfolio Presentation | 2026-05-14
+Standalone Vite+React at desk-deck.vercel.app. 10 slides, Framer Motion, ReactFlow (disabled). No GitHub remote until Coach decides to go public.
+## D055 | Pipeline Deploys Frontend Directly [supersedes D027, D033, D054] | 2026-05-20
+daily_refresh.yml: npx vercel deploy --prod after data commit. Bot commits cannot trigger push-based workflows (GHA security rule prevents it).
+## D056 | Documentary Series + Site | 2026-05-20
+8 episodes at desk/documentary/. Reading site at documentary-site-xi.vercel.app. Shareable project journey for archive and boss review.
+## D057 | Replace BigQuery with DuckDB + Parquet history files | 2026-06-30
+DuckDB runs in-process inside GitHub Actions — no server, no account, no billing. dbt-duckdb~=1.8.0 (pin minor — must match dbt-core 1.8.7). data/desk.duckdb is ephemeral per run (gitignored). Two Parquet files committed to repo for history: fact_risk_score_history.parquet + download_history.parquet (~5MB/year). pypi_ingest self-seeds scheduler_queue from hugovk every run. pandas must be in requirements.txt (DuckDB .df() depends on it). Pipeline live: run 28459003731 all 15 steps green.
