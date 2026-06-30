@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
-import pandas as pd
 
 from ingestion.db import DB_PATH, get_connection
 
@@ -48,9 +47,8 @@ def _nan(v):
 
 def _df_rows(conn, query: str) -> list[dict]:
     """Execute query and return list of dicts with NaN replaced by None."""
-    df = conn.execute(query).df()
-    df = df.where(pd.notnull(df), None)
-    return df.to_dict(orient="records")
+    rows = conn.execute(query).df().to_dict(orient="records")
+    return [{k: _nan(v) for k, v in row.items()} for row in rows]
 
 # ── Data loaders ─────────────────────────────────────────────────────────── #
 
