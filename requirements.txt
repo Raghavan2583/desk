@@ -3,7 +3,7 @@
 
 # D057 — DuckDB replaces BigQuery (dbt-duckdb replaces dbt-bigquery)
 duckdb>=1.0.0
-dbt-duckdb>=1.8.0
+dbt-duckdb~=1.8.0
 pyarrow>=16.1.0
 
 # Increment 2-5 — Ingestion pipeline
