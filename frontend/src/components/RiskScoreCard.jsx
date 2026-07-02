@@ -392,11 +392,19 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
 
         {/* Col 3: Risk score */}
         <div style={{ flexShrink:0, textAlign:'right', background:`linear-gradient(135deg,${riskColor}10 0%,transparent 70%)`, border:`1px solid ${riskColor}33`, borderRadius:12, padding:'14px 18px', boxShadow:`0 0 20px 3px ${riskColor}14`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-          <div style={{ fontSize:10, fontWeight:700, color:riskColor, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:6 }}>{risk_label} RISK</div>
-          <div style={{ display:'flex', alignItems:'baseline', gap:5, justifyContent:'flex-end', marginBottom:6 }}>
-            <span style={{ fontSize:44, fontWeight:700, color:riskColor, lineHeight:1, textShadow:`0 0 30px ${riskColor}AA`, fontVariantNumeric:'tabular-nums' }}>{risk_score}</span>
-            <span style={{ fontSize:15, color:C.muted }}>/ 10</span>
+          <div style={{ fontSize:10, fontWeight:700, color:riskColor, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:6 }}>
+            {risk_label === 'DATA_INCOMPLETE' ? 'DATA INCOMPLETE' : `${risk_label} RISK`}
           </div>
+          {risk_label === 'DATA_INCOMPLETE' ? (
+            <div style={{ fontSize:12, color:C.muted, maxWidth:160, lineHeight:1.5, marginBottom:6 }}>
+              Never successfully verified — not enough data for a risk assessment.
+            </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'baseline', gap:5, justifyContent:'flex-end', marginBottom:6 }}>
+              <span style={{ fontSize:44, fontWeight:700, color:riskColor, lineHeight:1, textShadow:`0 0 30px ${riskColor}AA`, fontVariantNumeric:'tabular-nums' }}>{risk_score}</span>
+              <span style={{ fontSize:15, color:C.muted }}>/ 10</span>
+            </div>
+          )}
           <div style={{ display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
             <span style={{ fontSize:16, fontWeight:700, color:trendColor }}>{trendArrow}</span>
             <span style={{ fontSize:11, color:C.muted }}>{(blast_radius_count??0).toLocaleString()} depend</span>

@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timezone
 
 import requests
+from cvss import CVSS2, CVSS3, CVSS4
 
 from ingestion.db import get_connection, insert_rows
 from ingestion.utils.backoff import retry_with_backoff
@@ -59,7 +60,29 @@ _CVSS_THRESHOLDS = [
     (0.0, "NONE"),
 ]
 
+_CVSS_PARSERS = {
+    "CVSS_V4": CVSS4,
+    "CVSS_V3": CVSS3,
+    "CVSS_V2": CVSS2,
+}
+
 # ── Severity helpers ─────────────────────────────────────────────────────── #
+
+def _parse_cvss_score(sev: dict) -> float | None:
+    """
+    OSV's severity[].score is a CVSS *vector string* (e.g. 'CVSS:3.1/AV:N/
+    AC:L/...'), not a plain number — it has to be decoded to get the numeric
+    base score. Naively float()-ing the vector string always fails silently.
+    """
+    parser = _CVSS_PARSERS.get(sev.get("type"))
+    vector = sev.get("score") or ""
+    if parser is None or not vector:
+        return None
+    try:
+        return float(parser(vector).base_score)
+    except Exception:
+        return None
+
 
 def _parse_severity(vuln: dict) -> tuple[str | None, float | None]:
     db_specific = vuln.get("database_specific") or {}
@@ -68,12 +91,9 @@ def _parse_severity(vuln: dict) -> tuple[str | None, float | None]:
 
     cvss_score: float | None = None
     for sev in vuln.get("severity") or []:
-        raw_score = sev.get("score", "")
-        try:
-            cvss_score = float(raw_score)
+        cvss_score = _parse_cvss_score(sev)
+        if cvss_score is not None:
             break
-        except (ValueError, TypeError):
-            pass
 
     if label is None and cvss_score is not None:
         for threshold, derived_label in _CVSS_THRESHOLDS:

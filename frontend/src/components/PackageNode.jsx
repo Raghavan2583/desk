@@ -104,7 +104,7 @@ export default function PackageNode({ data }) {
             padding:      '1px 5px',
             flexShrink:   0,
           }}>
-            {risk_label}
+            {risk_label?.replace('_', ' ')}
           </span>
 
           <span style={{

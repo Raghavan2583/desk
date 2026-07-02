@@ -59,7 +59,6 @@ def _load_packages(conn) -> dict[str, dict]:
             p.latest_version,
             p.summary,
             p.requires_python,
-            p.monthly_downloads,
             p.github_repo_url,
             p.has_github_link,
             r.risk_score,
@@ -71,12 +70,17 @@ def _load_packages(conn) -> dict[str, dict]:
             r.component_downloads,
             r.blast_radius_count,
             r.score_version,
-            m.last_commit_at,
-            m.days_since_last_commit,
-            m.commit_count_90d,
-            m.contributors_count,
-            m.is_archived,
-            m.activity_label
+            r.maintainer_status,
+            r.maintainer_last_verified_at,
+            r.maintainer_last_commit_at,
+            r.maintainer_days_since_last_commit,
+            r.maintainer_commit_count_90d,
+            r.maintainer_is_archived,
+            r.maintainer_activity_label,
+            r.downloads_status,
+            r.downloads_last_verified_at,
+            r.downloads_resolved_monthly AS monthly_downloads,
+            m.contributors_count
         FROM desk_prod.fact_risk_scores r
         JOIN desk_prod.dim_packages p ON r.package_name = p.package_name
         LEFT JOIN desk_prod.dim_maintainers m ON p.github_repo_url = m.github_repo_url
@@ -268,12 +272,14 @@ def _build_package_json(
     maintainer = None
     if pkg["has_github_link"]:
         maintainer = {
-            "last_commit_at":         _ts(pkg["last_commit_at"]),
-            "days_since_last_commit":  pkg["days_since_last_commit"],
-            "commit_count_90d":        pkg["commit_count_90d"],
-            "contributors_count":      pkg["contributors_count"],
-            "is_archived":             pkg["is_archived"],
-            "activity_label":          pkg["activity_label"],
+            "status":                 pkg["maintainer_status"],
+            "last_verified_at":       _ts(pkg["maintainer_last_verified_at"]),
+            "last_commit_at":         _ts(pkg["maintainer_last_commit_at"]),
+            "days_since_last_commit": pkg["maintainer_days_since_last_commit"],
+            "commit_count_90d":       pkg["maintainer_commit_count_90d"],
+            "contributors_count":     pkg["contributors_count"],
+            "is_archived":            pkg["maintainer_is_archived"],
+            "activity_label":         pkg["maintainer_activity_label"],
         }
     return {
         "package_name":         pkg["package_name"],
@@ -281,6 +287,8 @@ def _build_package_json(
         "summary":              pkg["summary"],
         "requires_python":      pkg["requires_python"],
         "monthly_downloads":    pkg["monthly_downloads"],
+        "downloads_status":         pkg["downloads_status"],
+        "downloads_last_verified_at": _ts(pkg["downloads_last_verified_at"]),
         "github_repo_url":      pkg["github_repo_url"],
         "risk_score":           pkg["risk_score"],
         "risk_label":           pkg["risk_label"],

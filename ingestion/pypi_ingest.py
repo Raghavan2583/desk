@@ -8,6 +8,15 @@ Writes new or changed packages to raw_pypi_packages.
 Skips packages whose version matches the current record in dim_packages.
 On first run (dim_packages empty), all packages are written.
 
+Download counts (pypistats.org) are rotated, not checked for all 1,000
+packages every run: pypistats.org's real limit is 30 requests/minute
+site-wide (see D058), which can't cover 1,000 packages daily. Each run
+checks whichever DOWNLOADS_BATCH_SIZE packages have gone longest without a
+successful check (from the committed download_history.parquet), so every
+package is refreshed roughly every ~3-4 weeks. scoring/risk_score.py carries
+forward the last known real count (with its real date) for packages not
+checked this run — see D058.
+
 Usage:
     DESK_DB_PATH=data/desk.duckdb python ingestion/pypi_ingest.py
 """
@@ -17,7 +26,9 @@ import os
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
+import duckdb
 import requests
 
 from ingestion.db import get_connection, insert_rows
@@ -30,6 +41,12 @@ logger = logging.getLogger(__name__)
 
 _PACKAGES_URL = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
 TOP_N = int(os.environ.get("PYPI_TOP_N", "1000"))
+
+# pypistats.org allows 30 req/min site-wide — 40 requests spaced 2.5s apart
+# is ~24/min, safely under that with margin for jitter/retries.
+DOWNLOADS_BATCH_SIZE  = 40
+DOWNLOADS_REQ_DELAY   = 2.5
+DOWNLOAD_HISTORY_PARQUET = Path(os.environ.get("DESK_HISTORY_DIR", "data/history")) / "download_history.parquet"
 
 # ── GitHub Search fallback ────────────────────────────────────────────────── #
 
@@ -143,6 +160,38 @@ def _search_github_url(package: str, session: requests.Session) -> str | None:
     return None
 
 
+def _select_download_batch(packages: list[str]) -> set[str]:
+    """
+    Pick which packages get a pypistats.org check this run: whichever have
+    gone longest without a successful one (never-checked packages first),
+    from the committed history file — not an in-memory guess, since DuckDB
+    itself doesn't persist between runs.
+    """
+    last_checked: dict[str, str] = {}
+    if DOWNLOAD_HISTORY_PARQUET.exists():
+        conn_mem = duckdb.connect(":memory:")
+        try:
+            rows = conn_mem.execute("""
+                SELECT package_name, MAX(recorded_at) AS last_checked
+                FROM read_parquet(?)
+                GROUP BY package_name
+            """, [str(DOWNLOAD_HISTORY_PARQUET)]).fetchall()
+        finally:
+            conn_mem.close()
+        last_checked = {row[0]: str(row[1]) for row in rows}
+
+    # Packages never successfully checked sort first (empty string sorts
+    # before any real date), then oldest-checked first.
+    ordered = sorted(packages, key=lambda p: last_checked.get(p, ""))
+    batch = set(ordered[:DOWNLOADS_BATCH_SIZE])
+    logger.info(
+        "downloads rotation: checking %d/%d packages this run (pypistats.org "
+        "can't support checking all packages daily — see D058)",
+        len(batch), len(packages),
+    )
+    return batch
+
+
 _pypistats_rate_limited = False
 
 
@@ -223,6 +272,7 @@ def main() -> None:
         _seed_queue(conn)
         packages       = _load_queue(conn)
         known_versions = _load_known_versions(conn)
+        download_batch = _select_download_batch(packages)
         logger.info("packages in queue: %d  known in dim_packages: %d",
                     len(packages), len(known_versions))
 
@@ -246,7 +296,11 @@ def main() -> None:
                         completed.append(package)
                         continue
 
-                    downloads = _fetch_monthly_downloads(package, session)
+                    if package in download_batch:
+                        downloads = _fetch_monthly_downloads(package, session)
+                        time.sleep(DOWNLOADS_REQ_DELAY)
+                    else:
+                        downloads = None
                     gh_url    = _extract_github_url(data["info"])
                     if not gh_url:
                         gh_url = _search_github_url(package, session)

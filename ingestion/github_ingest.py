@@ -33,6 +33,9 @@ INTER_BATCH_SLEEP = 2
 RATE_LIMIT_BUFFER = 100
 DAYS_HISTORY      = 90
 
+SECONDARY_RATE_LIMIT_MAX_RETRIES  = 3
+SECONDARY_RATE_LIMIT_DEFAULT_WAIT = 60
+
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 
 GITHUB_REPO_SCHEMA = {
@@ -140,6 +143,25 @@ def _check_rate_limit(
             remaining, sleep_secs,
         )
         time.sleep(sleep_secs)
+
+
+def _secondary_rate_limit_wait(exc: Exception) -> int | None:
+    """
+    GitHub's secondary rate limit (abuse detection) returns 403 even when the
+    primary point budget (X-RateLimit-Remaining) has plenty left — it's a
+    separate "you're going too fast" signal, not a budget signal. Returns the
+    number of seconds to wait before retrying, or None if exc isn't this case.
+    """
+    if not isinstance(exc, requests.exceptions.HTTPError) or exc.response is None:
+        return None
+    response = exc.response
+    if response.status_code != 403:
+        return None
+    if "retry-after" in response.headers:
+        return int(response.headers["retry-after"])
+    if "secondary rate limit" in response.text.lower():
+        return SECONDARY_RATE_LIMIT_DEFAULT_WAIT
+    return None
 
 # ── Row builder ──────────────────────────────────────────────────────────── #
 
@@ -271,23 +293,36 @@ def main() -> None:
         with requests.Session() as session:
             for batch_num, start in enumerate(range(0, len(batch_items), BATCH_SIZE)):
                 batch = batch_items[start:start + BATCH_SIZE]
-                try:
-                    batch_rows, batch_completed = _execute_batch(
-                        batch, session, token, since_90d, ingested_at,
-                        batch_num=batch_num,
-                    )
-                    rows.extend(batch_rows)
-                    completed.extend(batch_completed)
-                    logger.info(
-                        "batch %d–%d done — %d rows",
-                        start, start + len(batch) - 1, len(batch_rows),
-                    )
-                    if start + BATCH_SIZE < len(batch_items):
-                        time.sleep(INTER_BATCH_SLEEP)
-                except Exception as exc:
-                    logger.error("batch %d–%d failed: %s", start, start + len(batch) - 1, exc)
-                    for package_name, _, _, _ in batch:
-                        mark_error(conn, package_name, str(exc), "last_github_ingest_at")
+                for attempt in range(SECONDARY_RATE_LIMIT_MAX_RETRIES + 1):
+                    try:
+                        batch_rows, batch_completed = _execute_batch(
+                            batch, session, token, since_90d, ingested_at,
+                            batch_num=batch_num,
+                        )
+                        rows.extend(batch_rows)
+                        completed.extend(batch_completed)
+                        logger.info(
+                            "batch %d–%d done — %d rows",
+                            start, start + len(batch) - 1, len(batch_rows),
+                        )
+                        break
+                    except Exception as exc:
+                        wait = _secondary_rate_limit_wait(exc)
+                        if wait is not None and attempt < SECONDARY_RATE_LIMIT_MAX_RETRIES:
+                            logger.warning(
+                                "batch %d–%d hit GitHub's secondary rate limit — "
+                                "waiting %ds before retry (%d/%d)",
+                                start, start + len(batch) - 1, wait,
+                                attempt + 1, SECONDARY_RATE_LIMIT_MAX_RETRIES,
+                            )
+                            time.sleep(wait)
+                            continue
+                        logger.error("batch %d–%d failed: %s", start, start + len(batch) - 1, exc)
+                        for package_name, _, _, _ in batch:
+                            mark_error(conn, package_name, str(exc), "last_github_ingest_at")
+                        break
+                if start + BATCH_SIZE < len(batch_items):
+                    time.sleep(INTER_BATCH_SLEEP)
 
         if rows:
             insert_rows(conn, "desk_raw.raw_github_maintainers", rows)

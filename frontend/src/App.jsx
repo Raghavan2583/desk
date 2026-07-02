@@ -146,7 +146,7 @@ export default function App() {
                 const rc = RISK_COLORS[packageData.risk_label] ?? C.muted
                 return (
                   <span style={{ fontSize:11, fontWeight:700, color:rc, background:`${rc}22`, border:`1px solid ${rc}44`, borderRadius:4, padding:'2px 8px', textTransform:'uppercase', letterSpacing:'0.05em', boxShadow:`0 0 6px 1px ${rc}33` }}>
-                    {packageData.risk_label}
+                    {packageData.risk_label.replace('_', ' ')}
                   </span>
                 )
               })()}

@@ -1,8 +1,11 @@
 export const RISK_COLORS = {
-  CRITICAL: '#FF4444',
-  HIGH:     '#FF8C00',
-  MEDIUM:   '#FFD700',
-  LOW:      '#3FB950',
+  CRITICAL:        '#FF4444',
+  HIGH:            '#FF8C00',
+  MEDIUM:          '#FFD700',
+  LOW:             '#3FB950',
+  // Distinct from all four risk levels — this is not a risk assessment,
+  // it's an honest "we have never verified this package" flag.
+  DATA_INCOMPLETE: '#8B949E',
 }
 
 export const TREND_COLORS = {

@@ -144,6 +144,26 @@ def _create_fact_table(conn: duckdb.DuckDBPyConnection) -> None:
             component_downloads  DOUBLE,
             blast_radius_count   BIGINT,
             score_version        BIGINT,
-            computed_at          TIMESTAMPTZ
+            computed_at          TIMESTAMPTZ,
+            -- Resolved maintainer snapshot actually used to compute the score
+            -- above — may be carried forward from a prior run when this run's
+            -- GitHub fetch failed. maintainer_status distinguishes
+            -- LIVE / CARRIED_FORWARD / NEVER_VERIFIED / NO_GITHUB_LINK so
+            -- consumers never mistake stale data for a fresh read.
+            maintainer_status                 VARCHAR,
+            maintainer_last_verified_at       TIMESTAMPTZ,
+            maintainer_last_commit_at         TIMESTAMPTZ,
+            maintainer_days_since_last_commit BIGINT,
+            maintainer_commit_count_90d       BIGINT,
+            maintainer_is_archived            BOOLEAN,
+            maintainer_activity_label         VARCHAR,
+            -- Same idea for download counts — pypistats.org's rate limit
+            -- (30 req/min) can't cover all 1,000 packages daily, so only a
+            -- rotating subset is checked each run (see pypi_ingest.py).
+            -- downloads_status distinguishes LIVE / CARRIED_FORWARD /
+            -- NEVER_VERIFIED the same way.
+            downloads_status               VARCHAR,
+            downloads_last_verified_at     TIMESTAMPTZ,
+            downloads_resolved_monthly     BIGINT
         )
     """)

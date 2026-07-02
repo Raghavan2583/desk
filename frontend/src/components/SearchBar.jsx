@@ -124,7 +124,7 @@ export default function SearchBar({ packages, onSearch, compact = false }) {
                 textTransform:'uppercase',
                 letterSpacing:'0.05em',
               }}>
-                {pkg.risk_label}
+                {pkg.risk_label?.replace('_', ' ')}
               </span>
             </li>
           ))}
