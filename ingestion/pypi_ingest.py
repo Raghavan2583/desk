@@ -291,7 +291,11 @@ def main() -> None:
                     version = data["info"].get("version")
                     known   = known_versions.get(package)
 
-                    if known and known == version:
+                    # Version-unchanged packages still need a row written when
+                    # they're due for a download recheck this run — otherwise
+                    # the old download count keeps sitting in dim_packages and
+                    # risk_score.py has no way to tell it apart from a fresh one.
+                    if known and known == version and package not in download_batch:
                         skipped += 1
                         completed.append(package)
                         continue
