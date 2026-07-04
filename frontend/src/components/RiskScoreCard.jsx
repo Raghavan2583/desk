@@ -2,6 +2,7 @@ import { useState } from 'react'
 import MaintainerCard from './MaintainerCard'
 import Tooltip from './Tooltip'
 import { RISK_COLORS, TREND_COLORS, ACTIVITY_COLORS, C } from '../utils/colors'
+import { timeAgo } from '../utils/format'
 
 const TREND_ARROW = { RISING: '↑', FALLING: '↓', STABLE: '→' }
 
@@ -293,6 +294,7 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
     blast_radius_count, maintainer, cves = [],
     trend_history = [], direct_dependencies = [],
     direct_dependents = [],
+    monthly_downloads, downloads_status, downloads_last_verified_at,
   } = packageData
 
   const [showModal, setShowModal] = useState(false)
@@ -318,6 +320,17 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
           : `${Math.round(maintainer.days_since_last_commit/365)}y ago`,
       color: commitColor,
       tooltip:'Time since the maintainer last published a code update.',
+    },
+    downloads_status && {
+      text: downloads_status === 'NEVER_VERIFIED'
+        ? 'DOWNLOADS UNVERIFIED'
+        : `${(monthly_downloads ?? 0).toLocaleString()} downloads/mo`,
+      color: C.muted,
+      tooltip: downloads_status === 'NEVER_VERIFIED'
+        ? 'Download count has never been successfully verified for this package.'
+        : downloads_status === 'CARRIED_FORWARD'
+        ? `Download count last verified ${timeAgo(downloads_last_verified_at) ?? 'previously'}. DESK rechecks ~40 packages/day on rotation, so this figure is carried forward until its next scheduled check.`
+        : `Monthly downloads, verified ${timeAgo(downloads_last_verified_at) ?? 'today'}.`,
     },
   ].filter(Boolean)
 
