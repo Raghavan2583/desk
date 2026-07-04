@@ -344,6 +344,13 @@ def main() -> None:
 
     # package/{name}.json — one file per package
     pkg_dir = OUTPUT_DIR / "package"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+    stale = {f.stem for f in pkg_dir.glob("*.json")} - set(packages.keys())
+    for name in stale:
+        (pkg_dir / f"{name}.json").unlink()
+    if stale:
+        logger.info("removed %d stale package JSON files no longer in top-1,000", len(stale))
+
     for pkg_name, pkg in packages.items():
         pkg_json = _build_package_json(
             pkg,
