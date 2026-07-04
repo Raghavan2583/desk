@@ -3,6 +3,30 @@
 
 ---
 
+## Session: DESK — 2026-07-04 — ~3.5 hr (git cleanup, downloads-freshness UI, orphan bugfix, rotation retirement)
+
+### What happened
+Opened with crew-start health check (SESSION.md compacted 33→26 lines). Reviewed and committed a large backlog of pending local changes across 8 commits: gitignore fixes, untracking committed documentary-site/node_modules (2,139 files/49MB, committed since 2026-05-20), ARCH.md→SPEC.md rename, WSL2 vite polling fix, session memory docs, LEARNINGS.md/DESK_USER_GUIDE.md (with a stale BigQuery reference corrected to DuckDB), frontend lockfile. Confirmed the 07-04 02:07 UTC run (first with D059-D063 live) was green end-to-end. Built a downloads-freshness UI feature (pill + always-visible caption showing LIVE/CARRIED_FORWARD/NEVER_VERIFIED, mirroring MaintainerCard) after Coach asked to verify D061's rotation was visible anywhere on the site — it wasn't; the backend computed it correctly but nothing in the frontend read it. While verifying with a real screenshot, found a real backend bug: graph_export.py never deleted per-package JSON files for packages that fell out of the top-1000, leaving 72 stale orphans (some from May) silently missing newer schema fields — fixed + cleaned up. Then, prompted by Coach questioning the 25-day rotation cycle, re-examined the real rate-limit math and found the 40/day cap was overly conservative — retired the rotation entirely (D064): all 1,000 packages now checked daily, paced 3s apart, hardened with retry/backoff, workflow timeout raised 60→120 min.
+
+### Decisions made
+- D064: retire the 40/day download rotation, check all 1,000 packages daily at 3s/request (~20 req/min), retry/backoff hardened. See DECISIONS.md.
+- Orphaned export files: graph_export.py must delete package JSON for packages no longer in the current scored set, not just add/update. No decision number — bugfix, not an architecture choice.
+- documentary-site/node_modules untracked from git rather than a full history rewrite — Coach explicitly declined the rewrite as too invasive for the benefit.
+- INTERVIEW_DEEP_DIVE.md kept fully out of the public repo (gitignored) — candid interview-prep material, already distributed as a private Claude Artifact.
+
+### What failed and how it was resolved
+- None substantively — every change was verified before commit (production build checks, Node-script logic verification against real sample JSON, syntax/YAML validation). One process cleanup: a vite dev server from earlier verification was left running after an ineffective `kill`; caught and properly killed during a final double-check pass.
+
+### Where we stopped
+Phase: Operate. All work committed and pushed to origin/main (8 commits this session). Frontend auto-deployed twice via the existing deploy_frontend.yml path trigger, both green. Tonight's 02:07 UTC run is the first real test of D064 — a one-shot reminder is scheduled for tomorrow 10:37 AM to check it (run duration, timeout headroom, spot-check a previously-CARRIED_FORWARD package flipping to LIVE).
+
+### Learnings for next D3O cycle
+- A "known limitation, accepted as interim" note in DECISIONS.md is worth periodically re-questioning — D061's 40/day cap was framed as a rate-limit ceiling, but the real constraint was requests/minute, not requests/day; redoing the math showed all 1,000 fit in ~50 min.
+- Verifying a UI feature against real data can surface a second, unrelated bug (the orphan files) — worth chasing both to completion rather than only fixing the one in scope.
+- `kill <pid>` on a process launched via `npm exec`/`npx` doesn't always kill the real child process (node vite) — verify with `ps aux | grep` after killing, don't trust a clean exit code alone.
+
+---
+
 ## Session: DESK — 2026-07-03b — ~40 min (interview deep-dive documentary)
 
 ### What happened
@@ -82,57 +106,9 @@ deferred to a new session by mutual agreement (topic is long/distinct from Opera
 
 ---
 
-## Session: DESK — 2026-07-02 — ~2 hr (risk score data-integrity investigation + 4 fixes)
-
-### What happened
-Coach asked how to verify risk scores are actually correct. Traced a real incident using
-actual GitHub Actions logs (not guessing): python-multipart, and 41 other packages, jumped
-from a genuine MEDIUM to a false CRITICAL between two pipeline runs. Root cause: GitHub's
-secondary rate limit (403, distinct from the primary point-budget guard already in place)
-cascaded through 767/967 packages after the first hit, wiping their maintainer data for
-that run — and the scoring formula treated "no data" as "worst case." Coach correctly
-rejected a first-pass fix that defaulted missing data to neutral instead ("what if it's
-actually critical and we call it neutral"). Two more real, independently-verified bugs
-found in the same pass: CVSS scores always blank (osv_ingest.py tried to float() OSV's
-CVSS vector string instead of decoding it), and download counts missing for 98% of
-packages (pypistats.org's real 30 req/min site-wide limit can't cover 1,000 packages/day;
-old code hit it in ~4s and gave up for the rest of the run).
-
-### Decisions made
-- D059: Missing ingestion data must resolve to LIVE / CARRIED_FORWARD (real prior value +
-  real verification date, from new maintainer_history.parquet) / NEVER_VERIFIED (explicit
-  DATA_INCOMPLETE label, never a fabricated score) — never neutral, never worst-case.
-- D060: GitHub's secondary rate limit is a different signal from the primary quota guard —
-  now detected and retried with cooldown in github_ingest.py only; D014's general 4xx
-  policy unchanged elsewhere.
-- D061: Downloads rotate ~40 least-recently-checked packages/run (~3-4 week full cycle)
-  instead of all 1,000 daily; carries forward last real count + date otherwise. Coach
-  explicitly deferred true same-day refresh to a future step.
-- D062: cvss==3.6 added (flagged to Coach first) to properly decode CVSS vectors.
-
-### What failed and how it was resolved
-- First attempt at the missing-maintainer-data fix used a flat neutral (5.0) fallback
-  regardless of cause. Coach rejected it — researched real precedent (OpenSSF Scorecard's
-  "inconclusive result" pattern) before redoing it as the LIVE/CARRIED_FORWARD/
-  NEVER_VERIFIED resolution in D059 instead.
-
-### Where we stopped
-Phase: Operate. All 4 fixes implemented and committed locally only — commit 76c75033 on
-main, NOT pushed (branch ahead 1, behind 2 of origin). Coach ran out of time before the
-planned review pass — paused deliberately, not blocked. Frontend build verified clean
-(vite build, 530 modules). All new Python logic verified via py_compile + standalone
-scenario simulations (duckdb not installed locally) — all passed. Nothing pushed or
-deployed; the real pipeline is still running the pre-fix code.
-
-### Learnings for next D3O cycle
-- Treating missing pipeline data as either neutral or worst-case both quietly corrupt the
-  output — the only honest options are carry-forward-with-real-timestamp or an explicit
-  "unverified" state. Applies to any future data source DESK adds.
-- Real external rate limits (GitHub secondary limit, pypistats 30/min) only show up in real
-  run logs, not by reading the code. `gh api repos/{owner}/{repo}/actions/jobs/{id}/logs`
-  pulls raw logs when `gh run view --log` returns empty.
-- Local `git log` can be behind `origin/main` even mid-session — `git fetch` before trusting
-  local history when diagnosing "why does production look different from what I see."
+## Archive: 2026-07-02 [COMPRESSED]
+- D059-D062: risk-score data-integrity investigation, triggered by a real false-CRITICAL incident (python-multipart). Root cause: GitHub secondary rate limit cascaded data loss across 767/967 packages, and missing data was scored as worst-case. Fixed: LIVE/CARRIED_FORWARD/NEVER_VERIFIED resolution (D059, never neutral/worst-case — Coach explicitly rejected a neutral-fallback first pass), GitHub secondary rate limit retry (D060), download rotation 40/day (D061, deferred same-day refresh to a future step), CVSS vector decode via `cvss` lib (D062).
+- Learnings: neutral-or-worst-case defaults both silently corrupt output; real external rate limits only show up in run logs, not code (`gh api .../actions/jobs/{id}/logs` when `gh run view --log` is empty); `git fetch` before trusting local history mid-session.
 
 ---
 

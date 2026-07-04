@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-07-03
+# Phase: Operate | Updated: 2026-07-04
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -37,14 +37,14 @@ Monitor     : schema_monitor.yml — Mondays 08:17 UTC
 Documentary : https://documentary-site-xi.vercel.app
 
 ## Last Session
-2026-07-03 — Built INTERVIEW_DEEP_DIVE.md (technical interview deep-dive, grounded in real
-code + DECISIONS.md) and published it as a themed, private Claude Artifact for colleagues.
+2026-07-04 — Cleared the pending-changes backlog (8 commits), shipped a downloads-freshness
+UI feature, fixed a stale-orphan-files export bug, and retired D061's 40/day download
+rotation in favor of checking all 1,000 packages daily (D064).
 
 ## Next Action
-Coach checking tonight's 02:07 UTC pipeline run (first with D059-D063 live) directly, no
-session check-in needed. Decide whether to git-commit INTERVIEW_DEEP_DIVE.md. Still-pending:
-unrelated local changes (both vite.config.js, ARCH.md deleted, untracked docs) unreviewed;
-documentary-site (8-episode journey narrative) work still separately open.
+Coach checking tomorrow (2026-07-05, reminder set 10:37 AM) whether the 02:07 UTC run —
+first real test of D064 — completed within the new 120-min timeout, and whether a
+previously-CARRIED_FORWARD package (e.g. absl-py) now shows LIVE with today's date.
   Deck URL: https://desk-deck.vercel.app
   Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 
