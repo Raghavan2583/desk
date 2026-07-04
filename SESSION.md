@@ -14,9 +14,9 @@ Summary : Cleared pending-changes backlog, shipped downloads-freshness UI, fixed
           export files (72 stale packages), retired the 40/day download rotation (D064).
 
 ## Next Action — on resume
-Task    : Check tomorrow's 02:07 UTC run (reminder set 10:37 AM) — first real test of D064.
-          Confirm it finishes within the new 120-min timeout and a previously-CARRIED_FORWARD
-          package (e.g. absl-py) now shows LIVE with today's date.
+Task    : Check the 02:07 UTC run (first real test of D064). Confirm it finishes within the
+          new 120-min timeout, check actual duration, and confirm absl-py (was
+          CARRIED_FORWARD) now shows LIVE with today's date.
   Deck URL: https://desk-deck.vercel.app
 
 ## Open Questions

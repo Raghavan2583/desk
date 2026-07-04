@@ -42,9 +42,9 @@ UI feature, fixed a stale-orphan-files export bug, and retired D061's 40/day dow
 rotation in favor of checking all 1,000 packages daily (D064).
 
 ## Next Action
-Coach checking tomorrow (2026-07-05, reminder set 10:37 AM) whether the 02:07 UTC run —
-first real test of D064 — completed within the new 120-min timeout, and whether a
-previously-CARRIED_FORWARD package (e.g. absl-py) now shows LIVE with today's date.
+Check last night's (2026-07-05) 02:07 UTC daily_refresh.yml run — first real test of D064.
+Confirm it completed within the new 120-min timeout, check actual duration, and spot-check
+absl-py on the live site (was CARRIED_FORWARD, should now show LIVE with today's date).
   Deck URL: https://desk-deck.vercel.app
   Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 
