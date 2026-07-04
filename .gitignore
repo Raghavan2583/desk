@@ -19,6 +19,9 @@ node_modules/
 # Cricket Crew — runtime scoreboard, not project content
 .crew-status
 
+# Candid internal prep material — private Artifact only, not for public repo
+INTERVIEW_DEEP_DIVE.md
+
 # dbt
 dbt/target/
 dbt/logs/
