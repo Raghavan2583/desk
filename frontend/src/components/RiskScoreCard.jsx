@@ -396,6 +396,11 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
               </Tooltip>
             ))}
           </div>
+          {downloads_status === 'CARRIED_FORWARD' && (
+            <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>
+              ↻ Downloads last verified {timeAgo(downloads_last_verified_at) ?? 'previously'} — DESK rechecks ~40 packages/day on rotation
+            </div>
+          )}
         </div>
 
         {/* Col 2: Maintainer — fills the middle gap */}
