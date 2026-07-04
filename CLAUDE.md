@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-06-30
+# Phase: Operate | Updated: 2026-07-03
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -37,12 +37,14 @@ Monitor     : schema_monitor.yml — Mondays 08:17 UTC
 Documentary : https://documentary-site-xi.vercel.app
 
 ## Last Session
-2026-06-30 — D057 complete. BigQuery → DuckDB + Parquet history migration built and deployed.
-3 pipeline runs to reach clean state (dbt-duckdb version pin, pandas missing from deps).
-Run 28459003731 — all 15 steps green. DESK live on DuckDB.
+2026-07-03 — Built INTERVIEW_DEEP_DIVE.md (technical interview deep-dive, grounded in real
+code + DECISIONS.md) and published it as a themed, private Claude Artifact for colleagues.
 
 ## Next Action
-Optional cleanup: delete GCP_PROJECT_ID + GCP_SERVICE_ACCOUNT_KEY from GitHub Settings → Secrets.
+Coach checking tonight's 02:07 UTC pipeline run (first with D059-D063 live) directly, no
+session check-in needed. Decide whether to git-commit INTERVIEW_DEEP_DIVE.md. Still-pending:
+unrelated local changes (both vite.config.js, ARCH.md deleted, untracked docs) unreviewed;
+documentary-site (8-episode journey narrative) work still separately open.
   Deck URL: https://desk-deck.vercel.app
   Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 

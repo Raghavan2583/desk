@@ -3,135 +3,151 @@
 
 ---
 
-## Session: DESK — 2026-06-30 — ~4 hr (D057 build)
+## Session: DESK — 2026-07-03b — ~40 min (interview deep-dive documentary)
 
 ### What happened
-Full D057 migration built and deployed. BigQuery → DuckDB migration: 24 files changed (803 insertions, 1096 deletions). New ingestion/db.py creates DuckDB schemas and all tables on every pipeline connection. pypi_ingest.py now self-seeds scheduler_queue from hugovk (queue was persistent in BigQuery; DuckDB is fresh each run). Two Parquet history files committed to repo (data/history/). First pipeline run: all 5 ingestion steps passed, dbt failed on MicrobatchConcurrency — dbt-duckdb pinned to ~=1.8.0 to match dbt-core 1.8.7. Second pipeline triggered; awaiting result.
+Coach requested a full technical deep-dive of DESK for interview prep — distinct from the
+8-episode documentary-site (D056), which is a project-journey narrative for archive/boss
+review. Read every real layer of the system (ingestion/*.py, db.py, all dbt SQL,
+risk_score.py, graph_export.py, daily_refresh.yml, DECISIONS.md D001-D063, LEARNINGS.md)
+before writing anything — no generic filler. Produced INTERVIEW_DEEP_DIVE.md (11 sections:
+story, architecture, pipeline flow, data model, tech decisions, code-level patterns,
+production failure scenarios, system design scaling, alternatives, interview Q&A bank,
+ownership). Then built and published a themed Claude Artifact version (sticky nav, DESK's
+real palette from colors.js/index.css, scroll-tracking) for sharing with colleagues —
+recommended over a third Vercel deploy since this doc is candid internal prep material, not
+public-facing like documentary-site/desk-deck.
 
 ### Decisions made
-- D057 build complete: commit ea7f4926 on main
-- dbt-duckdb pinned ~=1.8.0 (fix commit 4412ea25) — dbt-duckdb>=1.8.0 resolved to 1.9.x which needs dbt-core 1.9.x
+- Artifact (private-by-default, redeploy-in-place) over standing up a new Vercel project for
+  this doc — right tool for "share with a few colleagues," not a permanent public surface.
 
 ### What failed and how it was resolved
-- dbt-duckdb version conflict: `Capability.MicrobatchConcurrency` not in dbt-core 1.8.x. Fix: `dbt-duckdb~=1.8.0` constrains to <1.9.0.
+- None — single-pass write, no rework needed.
 
 ### Where we stopped
-Phase: Operate. D057 fully live. Pipeline run 28459003731 — all 15 steps green. Site updated.
-Coach must manually delete GCP_PROJECT_ID and GCP_SERVICE_ACCOUNT_KEY from GitHub Settings → Secrets (no longer used).
+Phase: Operate (unchanged). INTERVIEW_DEEP_DIVE.md committed to working tree (untracked,
+not yet git-committed by Coach). Artifact live, private, shareable on demand.
 
 ### Learnings for next D3O cycle
-- `>=X.Y.0` never pins minor version — pip installs latest, which may need a newer core version. Always use `~=X.Y.0` for adapter packages to stay in the same minor family.
-- DuckDB in-process: all 5 ingestion scripts shared a single .duckdb file cleanly with sequential access and explicit conn.close() calls.
-- When stripping a cloud provider from requirements.txt, audit all files for pandas/.df()/.to_dataframe() calls — pandas is often a silent transitive dependency of BigQuery but must be declared explicitly for DuckDB pipelines.
+- Verified: files outside the fixed crew-start read list (CLAUDE.md/AGENTS.md/DECISIONS.md/
+  GUARDRAILS.md/ROADMAP.md/SETUP.md/SESSION.md/session.log.md/DESIGN.md) do not get loaded
+  into context automatically — confirmed by grep, no cross-reference exists. Safe pattern for
+  any future large reference doc: keep it un-referenced by the crew files unless a session
+  actually needs to open it.
 
 ---
 
-## Session: DESK — 2026-06-30 — ~30 min
+## Session: DESK — 2026-07-03 — ~1 hr (review, D063 fix, push)
 
 ### What happened
-Session maintenance and architectural decision. DECISIONS.md compacted 285→92 lines (overdue from last session). BigQuery billing issue surfaced — Coach stopped GCP billing on June 1. Full pipeline architecture explained to Coach (fetch → DB → dbt transforms → score → export static JSON). Two options evaluated: DuckDB (Option 1) and pure Python no-DB (Option 3). D057 locked: replace BigQuery with DuckDB + Parquet files for append-only history. No code built — awaiting Coach build instruction.
+Reviewed the local-only commit 76c75033 (D059-D062) before push, as planned. Traced all
+four fixes against the actual code paths they touch (github_ingest.py retry logic,
+osv_ingest.py CVSS parsing, github_ingest.py maintainer carry-forward) — three checked out
+clean. The fourth (download rotation, D061) had a real bug: pypi_ingest.py's pre-existing
+"skip if PyPI version unchanged" check ran before the new download-batch check, so most
+packages never got a fresh row written even when due for a download recheck, leaving stale
+counts silently mislabeled LIVE. Fixed and committed as D063. Origin had also moved on
+(3 automated `chore: refresh graph data` bot commits, 06-30 to 07-02) — rebased cleanly
+(zero file overlap: bot commits only touch generated data, ours only touch source) and
+pushed both commits to main.
 
 ### Decisions made
-- D057: Replace BigQuery with DuckDB. dbt-duckdb adapter replaces dbt-bigquery. Two history tables (fact_risk_score_history, download history) persisted as Parquet files committed to repo (~5MB/year). Runs on GitHub Actions free runner — no hardware requirements, no account needed.
+- D063: download-batch check must run before the version-unchanged skip, or D061's rotation
+  never actually fires for stable packages. See DECISIONS.md.
 
 ### What failed and how it was resolved
-- Nothing failed. Session was planning only.
+- First push attempt was rejected (non-fast-forward) — origin had 3 bot data-refresh commits
+  we didn't have locally. Stashed unrelated pre-existing pending changes (CLAUDE.md,
+  DECISIONS.md, SESSION.md, session.log.md, both vite.config.js, ARCH.md deletion) before
+  rebasing to avoid risking them, rebased cleanly, restored the stash, then pushed.
 
 ### Where we stopped
-Phase: Operate. D057 approved, build not started. Awaiting Coach "go" signal.
+Phase: Operate. Commits 0d13cbdb (D059-D062) + dd6f1b54 (D063) pushed to origin/main.
+Neither daily_refresh.yml (schedule/dispatch only) nor deploy_frontend.yml (frontend/**
+paths only) triggers on this push, so nothing executes until tonight's 02:07 UTC scheduled
+run — Coach will check it directly, no session check-in requested. The older unrelated
+pending pile (CLAUDE.md, DECISIONS.md, SESSION.md, session.log.md, vite.config.js x2,
+ARCH.md deletion, untracked SPEC.md/LEARNINGS.md/DESK_USER_GUIDE.md) is still uncommitted
+and unreviewed — untouched this session. Coach wants to discuss documentary creation next,
+deferred to a new session by mutual agreement (topic is long/distinct from Operate work).
 
 ### Learnings for next D3O cycle
-- DuckDB runs in-process inside GitHub Actions — no server, no account, no billing.
-- Parquet files for append-only history are safe to commit — tiny size, grows ~5MB/year.
-- BigQuery trend history (May 1–June 1) is unrecoverable but only 1 month — starting fresh is fine.
-- BigQuery scan-based billing is a trap for append-only pipelines: tables grow → scan cost grows silently.
+- A fix that adds new "skip this work" branching (D061's download batch) has to be checked
+  against every *existing* "skip this work" branch already in the function — two independent
+  skip conditions can silently AND together into "skipped more often than either intended."
+- Before pushing after any gap, `git fetch` + compare file lists between the two branches
+  first — if there's zero overlap, rebase is safe without reading every line of the bot's
+  commits individually.
 
 ---
 
-## Session: DESK — 2026-05-23 — ~1 hr
+## Session: DESK — 2026-07-02 — ~2 hr (risk score data-integrity investigation + 4 fixes)
 
 ### What happened
-Crew maintenance session — no code changes. session.log.md compacted (496→134 lines). ARCH.md renamed to SPEC.md (two architecture files reconciled — spec-level vs narrative-level, not duplicates). Soul file improvements reviewed and one gap filled: observer.md lacked a crew-start compaction response block. Permanent fix added to striker.md: check existing .md files before creating any new one.
+Coach asked how to verify risk scores are actually correct. Traced a real incident using
+actual GitHub Actions logs (not guessing): python-multipart, and 41 other packages, jumped
+from a genuine MEDIUM to a false CRITICAL between two pipeline runs. Root cause: GitHub's
+secondary rate limit (403, distinct from the primary point-budget guard already in place)
+cascaded through 767/967 packages after the first hit, wiping their maintainer data for
+that run — and the scoring formula treated "no data" as "worst case." Coach correctly
+rejected a first-pass fix that defaulted missing data to neutral instead ("what if it's
+actually critical and we call it neutral"). Two more real, independently-verified bugs
+found in the same pass: CVSS scores always blank (osv_ingest.py tried to float() OSV's
+CVSS vector string instead of decoding it), and download counts missing for 98% of
+packages (pypistats.org's real 30 req/min site-wide limit can't cover 1,000 packages/day;
+old code hit it in ~4s and gave up for the rest of the run).
 
 ### Decisions made
-- ARCH.md renamed to SPEC.md — spec-level detail file. ARCHITECTURE.md remains narrative overview. One source of truth per concern.
-- striker.md: new rule — NEVER creates a .md file without listing existing project .md files and confirming no scope overlap to Dhoni.
-- observer.md: crew-start compaction block added — Observer responds to Dhoni's startup flag before any work is routed.
+- D059: Missing ingestion data must resolve to LIVE / CARRIED_FORWARD (real prior value +
+  real verification date, from new maintainer_history.parquet) / NEVER_VERIFIED (explicit
+  DATA_INCOMPLETE label, never a fabricated score) — never neutral, never worst-case.
+- D060: GitHub's secondary rate limit is a different signal from the primary quota guard —
+  now detected and retried with cooldown in github_ingest.py only; D014's general 4xx
+  policy unchanged elsewhere.
+- D061: Downloads rotate ~40 least-recently-checked packages/run (~3-4 week full cycle)
+  instead of all 1,000 daily; carries forward last real count + date otherwise. Coach
+  explicitly deferred true same-day refresh to a future step.
+- D062: cvss==3.6 added (flagged to Coach first) to properly decode CVSS vectors.
 
 ### What failed and how it was resolved
-- Nothing failed. All changes were additive or non-destructive.
+- First attempt at the missing-maintainer-data fix used a flat neutral (5.0) fallback
+  regardless of cause. Coach rejected it — researched real precedent (OpenSSF Scorecard's
+  "inconclusive result" pattern) before redoing it as the LIVE/CARRIED_FORWARD/
+  NEVER_VERIFIED resolution in D059 instead.
 
 ### Where we stopped
-Phase: Operate. DESK stable. No pending code changes.
+Phase: Operate. All 4 fixes implemented and committed locally only — commit 76c75033 on
+main, NOT pushed (branch ahead 1, behind 2 of origin). Coach ran out of time before the
+planned review pass — paused deliberately, not blocked. Frontend build verified clean
+(vite build, 530 modules). All new Python logic verified via py_compile + standalone
+scenario simulations (duckdb not installed locally) — all passed. Nothing pushed or
+deployed; the real pipeline is still running the pre-fix code.
 
 ### Learnings for next D3O cycle
-- File proliferation (two arch docs) is caught by making Striker check before creating, not by Observer detecting after.
-- DECISIONS.md compaction should happen every 2-3 sessions, not wait until 285 lines.
+- Treating missing pipeline data as either neutral or worst-case both quietly corrupt the
+  output — the only honest options are carry-forward-with-real-timestamp or an explicit
+  "unverified" state. Applies to any future data source DESK adds.
+- Real external rate limits (GitHub secondary limit, pypistats 30/min) only show up in real
+  run logs, not by reading the code. `gh api repos/{owner}/{repo}/actions/jobs/{id}/logs`
+  pulls raw logs when `gh run view --log` returns empty.
+- Local `git log` can be behind `origin/main` even mid-session — `git fetch` before trusting
+  local history when diagnosing "why does production look different from what I see."
 
 ---
 
-## Session: DESK — 2026-05-20 — ~2 hr
-
-### What happened
-Two infrastructure fixes and one large content deliverable. (1) Pipeline bot-push deploy failure diagnosed: daily_refresh.yml was running but site frozen at May 15 data. Root cause: GitHub Actions does not trigger push-based workflows from github-actions[bot] commits — a security rule. Fix: deploy step added directly inside daily_refresh.yml (D055). (2) Gmail SMTP alert reverted — Coach did not want to share email password. Switched to GitHub native notifications. (3) 8-episode documentary series written and deployed at documentary-site-xi.vercel.app.
-
-### Decisions made
-- D055: daily_refresh.yml deploys Vercel directly. Supersedes D054.
-- D056: Documentary series (8 episodes) + reading site at documentary-site-xi.vercel.app.
-
-### What failed and how it was resolved
-- Gmail SMTP alert reverted — no email password. GitHub native notifications used instead.
-- node_modules committed in first documentary commit — .gitignore missing. Fixed with git rm -r --cached.
-- Vercel build failed: episodes.js imported markdown from outside project root. Fix: copied files into documentary-site/src/episodes/.
-
-### Where we stopped
-Phase: Operate. DESK stable. Pipeline deploys correctly after every daily run.
-
-### Learnings for next D3O cycle
-- GitHub Actions bot-push limitation is a recurring trap. Deploy step must live in the same job as the data commit.
-- Pipeline success ≠ site updated. Curl the live URL to verify the full chain.
+## Archive: 2026-06-30 [COMPRESSED]
+- D057 planned then built: BigQuery→DuckDB migration (24 files, commit ea7f4926), dbt-duckdb pinned ~=1.8.0 (MicrobatchConcurrency conflict, fix 4412ea25), pipeline live all 15 steps green (run 28459003731). Orphaned GCP secrets deleted from GitHub after stability confirmed.
+- D058: NaN serialisation bug found (CVE fields → literal `NaN` token → invalid JSON → silent JS parse failure → dead leaderboard tiles) and fixed in two rounds — first pass missed that pandas float64 columns silently revert `None` back to `NaN`; `_df_rows()` needed the same `_nan()` treatment as the `fetchall()` path. Verified closed: run 28468472701 green, tiles clickable.
+- Learnings preserved in D057/D058 (DECISIONS.md): `~=X.Y.0` pin adapter packages to match core version; audit for silent transitive deps (pandas) when stripping a cloud provider; sanitise NaN at every serialisation path independently, not just at the data layer; `allow_nan=False` on any `json.dumps` a browser will parse.
 
 ---
 
-## Session: DESK — 2026-05-15 (extended) — ~1 hr
-
-### What happened
-LinkedIn project section content written for DESK. Coach's AVP will review the profile directly. One entry (not two) — DESK with live product URL and deck URL. Final approved copy uses declarative, trust-focused voice matching the About section tone.
-
-### Decisions made
-- LinkedIn project: one entry, not two. Deck is supporting material inside the same entry.
-- LinkedIn description voice: short, declarative, trust-focused.
-
-### What failed and how it was resolved
-- First draft second line was too explanatory. Replaced with declarative contrast.
-
-### Where we stopped
-Phase: Operate. LinkedIn content finalised. Awaiting AVP review.
-
-### Learnings for next D3O cycle
-- Profile copy must echo the same voice as the About section — inconsistency is the first thing a senior reviewer notices.
-
----
-
-## Sessions: 2026-05-12 to 2026-05-15 [COMPRESSED]
-- 2026-05-15 (deploy overwrite): Watch List expanded 12→20 tiles. Manual vercel --prod overwrote pipeline data — fixed via deploy_frontend.yml (D054). feedback_deploy_approval.md written to memory.
-- 2026-05-14 (deck rebuild, ~4 hrs): desk-deck rebuilt for LinkedIn — 10 slides, webp characters, 3 ReactFlow diagrams, glass-shatter CSS. D053 locked. ReactFlow blank fix: explicit pixel height required when parent uses alignItems:center.
-- 2026-05-14 (~3 hrs): Watch List tab, CVE Count tab, stat row popovers, share/copy URL routing (?pkg=name), score modal, graph re-center. desk-deck scaffolded.
-- 2026-05-12 (night): UPGRADE+SAFE VERSION merged split box (D050). Score modal per-factor pts + progress bar (D051). TL;DR panel (D052). WSL2+Vite: always restart dev server after edits — HMR does not fire across /mnt/d boundary.
-- 2026-05-12 (evening): CVE panel version-aware risk driver banner, patched/unpatched split (D048). Pencil.dev locked as global design tool (D047). Wordmark indigo+rose (D049).
-- 2026-05-12 (morning): Data-driven action banner getPrimaryRiskDriver() (D043). Tooltips position:fixed (D044). URL routing ?pkg=name (D045). Pipeline schedule drift accepted (D046).
-- 2026-05-10 (~8 hrs): Navy #0D1117 unified (D040). Scroll reveal both pages (D041). .react-flow__background CSS class override fixed → transparent (D042).
-
----
-
-## Archive: 2026-05-03 to 2026-05-08 [COMPRESSED]
-- 2026-05-08: Paused mid-UI-session. Resumed 2026-05-10.
-- 2026-05-07 (evening): Vertical graph TOP/MIDDLE/BOTTOM (D035). Home page risk dashboard + SVG health ring (D036). Orbital CSS @keyframes animation (D038).
-- 2026-05-07: [skip ci] unblocked Vercel deploys. GraphQL BATCH_SIZE 50→20 (D032). Maintainer rows 138→888. pypi_event_trigger race condition fixed (D034).
-- 2026-05-06: Optional extras filter (D028). OSV+GitHub timeout tuples (D029/D030). Rebase-before-push (D031). Guardian approved — DESK demo-ready.
-- 2026-05-05: Three-column graph layout; optional extras deferred; Vercel CLI deploy (D024/D025/D026/D027). Real user test: non-technical users found graph overwhelming.
-- 2026-05-04/05: Full deploy phase. GitHub repo, GCP IAM, BigQuery, Vercel live. 7+ pipeline runs — each failure exposed real infra bug. D016–D023 locked.
-- 2026-05-04: Increments 1–11 complete. Schema validation at ingestion (D015). SQL injection risk found and fixed in pypi_ingest.py.
-- 2026-05-03: Blueprint complete. Bootstrap via hugovk/top-pypi-packages, blast radius from deps.dev dependentCount, dagre layouts client-side.
+## Archive: 2026-05-03 to 2026-05-23 [COMPRESSED]
+- 2026-05-23: Crew maintenance. session.log.md compacted. ARCH.md → SPEC.md. striker.md rule added: check existing .md files before creating new ones.
+- 2026-05-20: Bot-push deploy fix (D055) — deploy step moved inside daily_refresh.yml. Documentary site deployed (D056, 8 episodes, documentary-site-xi.vercel.app).
+- 2026-05-15: LinkedIn project section written. One entry, trust-focused voice, live URL + deck URL.
+- 2026-05-12 to 2026-05-15: Watch List 12→20 tiles (D054). desk-deck rebuilt for LinkedIn (D053). Watch List tab, CVE Count tab, stat row popovers, URL routing, score modal. UPGRADE+SAFE VERSION box (D050-D052). CVE panel (D048). Pencil.dev locked (D047). Wordmark indigo+rose (D049). Navy #0D1117 (D040-D042).
+- 2026-05-03 to 2026-05-10: Full build + deploy. Blueprint complete. Increments 1–11. BigQuery + Vercel live (D016–D023). Guardian approved demo-ready. Graph layout (D024-D038).
 
 ---
