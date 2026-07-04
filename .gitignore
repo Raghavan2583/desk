@@ -13,6 +13,12 @@ venv/
 .venv/
 .pytest_cache/
 
+# Node (frontend, documentary-site)
+node_modules/
+
+# Cricket Crew — runtime scoreboard, not project content
+.crew-status
+
 # dbt
 dbt/target/
 dbt/logs/
