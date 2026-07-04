@@ -5,6 +5,7 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
-    fs: { allow: [path.resolve(__dirname, '..')] }
+    fs: { allow: [path.resolve(__dirname, '..')] },
+    watch: { usePolling: true, interval: 100 }
   }
 })
