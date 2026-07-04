@@ -3,19 +3,15 @@ ingestion/pypi_ingest.py
 Fetches package metadata from PyPI JSON API and pypistats.org.
 Seeds the scheduler_queue from hugovk top-1000 list on every run (DuckDB is
 ephemeral — queue must be seeded fresh each pipeline execution).
-Writes new or changed packages to raw_pypi_packages.
+Every package in the queue is re-fetched and re-written each run (needed
+since download counts are refreshed daily for all packages — see below).
 
-Skips packages whose version matches the current record in dim_packages.
-On first run (dim_packages empty), all packages are written.
-
-Download counts (pypistats.org) are rotated, not checked for all 1,000
-packages every run: pypistats.org's real limit is 30 requests/minute
-site-wide (see D058), which can't cover 1,000 packages daily. Each run
-checks whichever DOWNLOADS_BATCH_SIZE packages have gone longest without a
-successful check (from the committed download_history.parquet), so every
-package is refreshed roughly every ~3-4 weeks. scoring/risk_score.py carries
-forward the last known real count (with its real date) for packages not
-checked this run — see D058.
+Download counts (pypistats.org) are checked for all 1,000 packages every
+run, paced DOWNLOADS_REQ_DELAY seconds apart to stay under pypistats.org's
+30 requests/minute site-wide limit (see D061, D064). Any individual
+package whose fetch still fails (rate-limited despite retries, network
+error) falls back to scoring/risk_score.py carrying forward the last known
+real count (with its real date) from download_history.parquet.
 
 Usage:
     DESK_DB_PATH=data/desk.duckdb python ingestion/pypi_ingest.py
@@ -26,9 +22,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
-import duckdb
 import requests
 
 from ingestion.db import get_connection, insert_rows
@@ -42,11 +36,10 @@ logger = logging.getLogger(__name__)
 _PACKAGES_URL = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
 TOP_N = int(os.environ.get("PYPI_TOP_N", "1000"))
 
-# pypistats.org allows 30 req/min site-wide — 40 requests spaced 2.5s apart
-# is ~24/min, safely under that with margin for jitter/retries.
-DOWNLOADS_BATCH_SIZE  = 40
-DOWNLOADS_REQ_DELAY   = 2.5
-DOWNLOAD_HISTORY_PARQUET = Path(os.environ.get("DESK_HISTORY_DIR", "data/history")) / "download_history.parquet"
+# pypistats.org allows 30 req/min site-wide — 1,000 requests spaced 3s
+# apart is ~20/min, safely under that with margin for jitter/retries,
+# sustained across the whole run (~50 min for all 1,000 packages).
+DOWNLOADS_REQ_DELAY   = 3.0
 
 # ── GitHub Search fallback ────────────────────────────────────────────────── #
 
@@ -160,54 +153,16 @@ def _search_github_url(package: str, session: requests.Session) -> str | None:
     return None
 
 
-def _select_download_batch(packages: list[str]) -> set[str]:
-    """
-    Pick which packages get a pypistats.org check this run: whichever have
-    gone longest without a successful one (never-checked packages first),
-    from the committed history file — not an in-memory guess, since DuckDB
-    itself doesn't persist between runs.
-    """
-    last_checked: dict[str, str] = {}
-    if DOWNLOAD_HISTORY_PARQUET.exists():
-        conn_mem = duckdb.connect(":memory:")
-        try:
-            rows = conn_mem.execute("""
-                SELECT package_name, MAX(recorded_at) AS last_checked
-                FROM read_parquet(?)
-                GROUP BY package_name
-            """, [str(DOWNLOAD_HISTORY_PARQUET)]).fetchall()
-        finally:
-            conn_mem.close()
-        last_checked = {row[0]: str(row[1]) for row in rows}
-
-    # Packages never successfully checked sort first (empty string sorts
-    # before any real date), then oldest-checked first.
-    ordered = sorted(packages, key=lambda p: last_checked.get(p, ""))
-    batch = set(ordered[:DOWNLOADS_BATCH_SIZE])
-    logger.info(
-        "downloads rotation: checking %d/%d packages this run (pypistats.org "
-        "can't support checking all packages daily — see D058)",
-        len(batch), len(packages),
-    )
-    return batch
-
-
-_pypistats_rate_limited = False
+def _get_monthly_downloads(package: str, session: requests.Session) -> int:
+    url = f"https://pypistats.org/api/packages/{package}/recent"
+    response = session.get(url, timeout=10)
+    response.raise_for_status()
+    return response.json()["data"]["last_month"]
 
 
 def _fetch_monthly_downloads(package: str, session: requests.Session) -> int | None:
-    global _pypistats_rate_limited
-    if _pypistats_rate_limited:
-        return None
-    url = f"https://pypistats.org/api/packages/{package}/recent"
     try:
-        response = session.get(url, timeout=10)
-        if response.status_code == 429:
-            _pypistats_rate_limited = True
-            logger.warning("pypistats rate-limited — skipping downloads for remaining packages")
-            return None
-        response.raise_for_status()
-        return response.json()["data"]["last_month"]
+        return retry_with_backoff(_get_monthly_downloads, package, session)
     except Exception as exc:
         logger.warning("pypistats unavailable for %s: %s", package, exc)
         return None
@@ -272,7 +227,6 @@ def main() -> None:
         _seed_queue(conn)
         packages       = _load_queue(conn)
         known_versions = _load_known_versions(conn)
-        download_batch = _select_download_batch(packages)
         logger.info("packages in queue: %d  known in dim_packages: %d",
                     len(packages), len(known_versions))
 
@@ -280,31 +234,15 @@ def main() -> None:
 
         rows: list[dict]      = []
         completed: list[str]  = []
-        skipped = 0
 
         with requests.Session() as session:
             for i, package in enumerate(packages):
                 if i % 100 == 0:
                     logger.info("progress: %d/%d packages", i, len(packages))
                 try:
-                    data    = _fetch_pypi(package, session)
-                    version = data["info"].get("version")
-                    known   = known_versions.get(package)
-
-                    # Version-unchanged packages still need a row written when
-                    # they're due for a download recheck this run — otherwise
-                    # the old download count keeps sitting in dim_packages and
-                    # risk_score.py has no way to tell it apart from a fresh one.
-                    if known and known == version and package not in download_batch:
-                        skipped += 1
-                        completed.append(package)
-                        continue
-
-                    if package in download_batch:
-                        downloads = _fetch_monthly_downloads(package, session)
-                        time.sleep(DOWNLOADS_REQ_DELAY)
-                    else:
-                        downloads = None
+                    data      = _fetch_pypi(package, session)
+                    downloads = _fetch_monthly_downloads(package, session)
+                    time.sleep(DOWNLOADS_REQ_DELAY)
                     gh_url    = _extract_github_url(data["info"])
                     if not gh_url:
                         gh_url = _search_github_url(package, session)
@@ -323,8 +261,8 @@ def main() -> None:
         mark_complete(conn, completed, "last_pypi_ingest_at")
 
         logger.info(
-            "pypi_ingest complete — written=%d skipped=%d errors=%d",
-            len(rows), skipped, len(packages) - len(completed),
+            "pypi_ingest complete — written=%d errors=%d",
+            len(rows), len(packages) - len(completed),
         )
     finally:
         conn.close()
