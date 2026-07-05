@@ -590,31 +590,11 @@ Steps in order:
   11. git commit + push updated JSON files (Vercel autodeploys on push)
 ```
 
-### pypi_event_trigger.yml — runs every 6 hours (polling)
-```
-Steps in order:
-  1. Checkout repo
-  2. Python 3.11 + install
-  3. GCP auth
-  4. Run pypi_ingest.py
-     — Compare current PyPI version vs latest_version in dim_packages
-     — If unchanged: skip, log as checked, no write
-     — If changed: write to raw_pypi_packages
-  5. If any packages changed:
-     a. Run deps_dev_ingest.py for changed packages only
-     b. dbt build --select +dim_packages --target prod (selective)
-     c. risk_score.py for changed packages + their direct dependents
-     d. graph_export.py for affected package JSON files
-     e. git commit + push
-  6. If nothing changed: exit 0, no commit
-```
-
 ### GitHub Actions token budget (monthly estimate)
 | Workflow | Duration | Runs/month | Minutes |
 |---|---|---|---|
 | daily_refresh | ~10 min | 30 | 300 |
-| pypi_event_trigger | ~4 min | 120 | 480 |
-| **Total** | | | **~780 / 2,000 free** |
+| **Total** | | | **~300 / 2,000 free** |
 
 ---
 

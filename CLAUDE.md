@@ -57,7 +57,7 @@ IN:
 - 4 data sources: PyPI API, GitHub GraphQL API, OSV.dev, deps.dev
 - Risk score: numeric (x.x/10) + label (CRITICAL/HIGH/MEDIUM/LOW) + trend arrow
 - 5 outputs: blast radius graph, risk score card, maintainer card, 12-month trend line, blast radius count
-- Refresh: event-driven PyPI feed + 24hr GitHub maintainer check
+- Refresh: daily full pipeline run + 24hr GitHub maintainer check
 - Storage: DuckDB (in-process, ephemeral per run) + Parquet history files committed to repo (D057)
 - Transform: dbt Core
 - Frontend: React + React Flow on Vercel (desktop only)

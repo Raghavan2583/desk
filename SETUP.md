@@ -29,8 +29,7 @@
 DESK/
 ├── .github/
 │   └── workflows/
-│       ├── daily_refresh.yml        # 24hr GitHub maintainer check (all 1,000 packages)
-│       └── pypi_event_trigger.yml   # Fires on new PyPI package version published
+│       └── daily_refresh.yml        # 24hr GitHub maintainer check (all 1,000 packages)
 ├── ingestion/
 │   ├── pypi_ingest.py               # Top 1,000 packages — metadata + dependencies
 │   ├── github_ingest.py             # Maintainer activity via GraphQL (batched)

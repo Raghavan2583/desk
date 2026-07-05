@@ -18,7 +18,7 @@ It does this by continuously pulling data from four independent sources, transfo
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     GitHub Actions                               │
-│   daily_refresh.yml (02:07 UTC)  +  pypi_event_trigger.yml      │
+│                daily_refresh.yml (02:07 UTC)                    │
 └────────────┬──────────────────────────────────────────────────┘
              │
    ┌─────────▼──────────┐
@@ -325,11 +325,7 @@ The primary pipeline. Runs on a cron schedule (off the :00/:30 marks to avoid AP
 
 **Secrets used:** `GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT_KEY` (base64 encoded), `GH_TOKEN_1` (GitHub PAT for GraphQL), `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
-### 7.2 `pypi_event_trigger.yml` — event-driven
-
-A second pipeline that fires when PyPI package events are detected (new releases, yanked versions). This allows DESK to respond to changes between daily runs — if a popular package publishes a new version mid-day, the data is refreshed within the hour rather than waiting until 02:07 UTC the next morning.
-
-### 7.3 `schema_monitor.yml` — Mondays 08:17 UTC
+### 7.2 `schema_monitor.yml` — Mondays 08:17 UTC
 
 Runs `scripts/schema_health_check.py` weekly to verify that all expected BigQuery tables and columns exist. Catches schema drift early (e.g., if a source API changes its response format and the ingestion script silently writes fewer fields).
 
