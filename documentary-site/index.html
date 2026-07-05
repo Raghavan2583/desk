@@ -1,19 +1,719 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DESK — A Documentary Series</title>
-    <meta name="description" content="A complete story of building a production-grade dependency risk intelligence system from scratch. Eight episodes covering every decision, every bug, and every lesson." />
-    <meta property="og:title" content="DESK — A Documentary Series" />
-    <meta property="og:description" content="From idea to live system: the unfiltered story of building DESK, a PyPI dependency risk tool." />
-    <meta property="og:type" content="website" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DESK — Engineering Deep Dive</title>
+<style>
+  :root{
+    --bg:#1A1614; --bg-elevated:#201B19; --surface:#242020; --surface-2:#2B2523;
+    --border:#3D3735; --border-soft:#322C2A;
+    --text:#F2EDE8; --text-dim:#C9C0B8; --muted:#A09890;
+    --accent:#58A6FF; --accent-soft:rgba(88,166,255,.14);
+    --cherry:#C8102E; --beige:#C4B49A; --blush:#E8A4A8;
+    --risk-critical:#FF4444; --risk-high:#FF8C00; --risk-medium:#FFD700; --risk-low:#3FB950; --risk-incomplete:#8B949E;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#F5EFEC; --bg-elevated:#FFFFFF; --surface:#FFFFFF; --surface-2:#EFE6E1;
+      --border:#E0D3CC; --border-soft:#EAE0DA;
+      --text:#241E1C; --text-dim:#4A403C; --muted:#7A6D66;
+      --accent:#2E6FCC; --accent-soft:rgba(46,111,204,.10);
+      --cherry:#A80F26; --beige:#8C7A5C; --blush:#B85F66;
+      --risk-critical:#D6273A; --risk-high:#C15F00; --risk-medium:#8A6D00; --risk-low:#1E8A34; --risk-incomplete:#5B6570;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1A1614; --bg-elevated:#201B19; --surface:#242020; --surface-2:#2B2523;
+    --border:#3D3735; --border-soft:#322C2A;
+    --text:#F2EDE8; --text-dim:#C9C0B8; --muted:#A09890;
+    --accent:#58A6FF; --accent-soft:rgba(88,166,255,.14);
+    --cherry:#C8102E; --beige:#C4B49A; --blush:#E8A4A8;
+    --risk-critical:#FF4444; --risk-high:#FF8C00; --risk-medium:#FFD700; --risk-low:#3FB950; --risk-incomplete:#8B949E;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"]{
+    --bg:#F5EFEC; --bg-elevated:#FFFFFF; --surface:#FFFFFF; --surface-2:#EFE6E1;
+    --border:#E0D3CC; --border-soft:#EAE0DA;
+    --text:#241E1C; --text-dim:#4A403C; --muted:#7A6D66;
+    --accent:#2E6FCC; --accent-soft:rgba(46,111,204,.10);
+    --cherry:#A80F26; --beige:#8C7A5C; --blush:#B85F66;
+    --risk-critical:#D6273A; --risk-high:#C15F00; --risk-medium:#8A6D00; --risk-low:#1E8A34; --risk-incomplete:#5B6570;
+    color-scheme: light;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  @media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } *{ animation:none !important; transition:none !important; } }
+
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-sans); font-size:16px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{ color:var(--accent); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+  a:focus-visible, button:focus-visible, input:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;
+  }
+
+  .eyebrow{
+    font-family:var(--font-mono); font-size:.72rem; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--muted);
+  }
+
+  /* ---------- shell / sidebar ---------- */
+  .shell{ display:flex; min-height:100vh; max-width:1400px; margin:0 auto; }
+
+  .sidebar{
+    width:280px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+    height:100vh; overflow-y:auto; border-right:1px solid var(--border);
+    padding:1.6rem 1.2rem 3rem; background:var(--bg-elevated);
+  }
+  .sidebar-brand{ display:flex; align-items:baseline; gap:.5rem; margin-bottom:.15rem; }
+  .sidebar-brand .mark{ font-family:var(--font-mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em; }
+  .sidebar-brand .mark .risk-r{ color:var(--cherry); }
+  .sidebar-sub{ font-family:var(--font-mono); font-size:.68rem; color:var(--muted); letter-spacing:.03em; margin-bottom:1.6rem; }
+
+  .navlist{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+  .navlist a{
+    display:flex; gap:.6rem; align-items:baseline; padding:.42rem .5rem; border-radius:6px;
+    color:var(--text-dim); font-size:.86rem; line-height:1.3;
+  }
+  .navlist a:hover{ background:var(--surface-2); text-decoration:none; color:var(--text); }
+  .navlist a.active{ background:var(--accent-soft); color:var(--text); }
+  .navlist a.active .num{ color:var(--accent); }
+  .navlist .num{ font-family:var(--font-mono); font-size:.74rem; color:var(--muted); flex-shrink:0; width:1.3em; }
+
+  .sidebar-foot{
+    margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border-soft);
+    font-family:var(--font-mono); font-size:.68rem; color:var(--muted); line-height:1.6;
+  }
+
+  .navtoggle{
+    display:none; position:fixed; top:.9rem; left:.9rem; z-index:40;
+    width:2.4rem; height:2.4rem; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-family:var(--font-mono); font-size:1rem;
+    align-items:center; justify-content:center; cursor:pointer;
+  }
+
+  /* ---------- main ---------- */
+  .main{ flex:1; min-width:0; padding:3.2rem clamp(1.2rem, 4vw, 4rem) 8rem; }
+
+  .doc-header{ max-width:68ch; margin-bottom:3rem; }
+  .doc-header .eyebrow{ margin-bottom:.9rem; }
+  .doc-header h1{
+    font-family:var(--font-mono); font-size:clamp(1.7rem,3.4vw,2.3rem); line-height:1.22;
+    font-weight:700; letter-spacing:-.01em; text-wrap:balance; margin:0 0 .9rem;
+  }
+  .doc-header .lede{ font-size:1.08rem; color:var(--text-dim); max-width:62ch; }
+  .doc-header .lede em{ color:var(--text); font-style:normal; border-bottom:1px dashed var(--border); }
+
+  .howto{
+    max-width:68ch; margin-bottom:3.6rem; padding:1.1rem 1.3rem; border-radius:10px;
+    background:var(--surface); border:1px solid var(--border);
+  }
+  .howto .eyebrow{ margin-bottom:.5rem; color:var(--accent); }
+  .howto p{ margin:0; color:var(--text-dim); font-size:.95rem; }
+
+  section.doc-section{ max-width:68ch; margin-bottom:4.2rem; scroll-margin-top:2rem; }
+  section.doc-section > .sec-head{ display:flex; align-items:baseline; gap:.8rem; margin-bottom:1.3rem; }
+  section.doc-section > .sec-head .num{
+    font-family:var(--font-mono); font-size:1rem; color:var(--accent); flex-shrink:0;
+  }
+  section.doc-section h2{
+    font-family:var(--font-mono); font-size:clamp(1.25rem,2.2vw,1.55rem); font-weight:700;
+    letter-spacing:-.005em; text-wrap:balance; margin:0;
+  }
+  section.doc-section h3{
+    font-family:var(--font-mono); font-size:1.02rem; font-weight:700; margin:2rem 0 .8rem;
+    color:var(--text);
+  }
+  section.doc-section h4{
+    font-family:var(--font-sans); font-size:.95rem; font-weight:700; margin:1.4rem 0 .5rem; color:var(--text-dim);
+  }
+  section.doc-section p{ margin:0 0 1rem; }
+  section.doc-section ul, section.doc-section ol{ margin:0 0 1rem; padding-left:1.3rem; }
+  section.doc-section li{ margin-bottom:.4rem; }
+  section.doc-section strong{ color:var(--text); }
+  code{ font-family:var(--font-mono); font-size:.88em; background:var(--surface-2); padding:.12em .35em; border-radius:4px; }
+
+  .quote{
+    margin:1.3rem 0; padding:1rem 1.2rem; border-left:3px solid var(--cherry);
+    background:var(--surface); border-radius:0 8px 8px 0; color:var(--text-dim); font-size:.96rem;
+  }
+  .quote p{ margin:0; }
+  .quote p + p{ margin-top:.7rem; }
+
+  .callout{
+    margin:1.3rem 0; padding:1rem 1.2rem; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); font-size:.94rem; color:var(--text-dim);
+  }
+  .callout .eyebrow{ display:block; margin-bottom:.4rem; color:var(--accent); }
+
+  /* file-tab code panel */
+  .codepanel{ margin:1.3rem 0; border:1px solid var(--border); border-radius:9px; overflow:hidden; background:var(--bg-elevated); }
+  .codepanel .tab{
+    font-family:var(--font-mono); font-size:.72rem; letter-spacing:.02em; color:var(--muted);
+    padding:.45rem .8rem; border-bottom:1px solid var(--border); background:var(--surface-2);
+    display:flex; justify-content:space-between; gap:.6rem;
+  }
+  .codepanel .tab .src{ color:var(--text-dim); }
+  .codepanel pre{
+    margin:0; padding:1rem 1.1rem; overflow-x:auto; font-family:var(--font-mono);
+    font-size:.82rem; line-height:1.6; color:var(--text-dim); white-space:pre;
+  }
+  .codepanel pre .k{ color:var(--accent); }
+
+  /* tables — widen beyond reading column, scroll on overflow */
+  .table-wrap{ max-width:none; width:100%; margin:1.3rem 0; overflow-x:auto; border:1px solid var(--border); border-radius:9px; }
+  table{ border-collapse:collapse; width:100%; min-width:640px; font-size:.88rem; }
+  thead th{
+    text-align:left; font-family:var(--font-mono); font-size:.72rem; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--muted); background:var(--surface-2); padding:.65rem .8rem; border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  tbody td{ padding:.65rem .8rem; border-bottom:1px solid var(--border-soft); vertical-align:top; color:var(--text-dim); }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody td:first-child{ color:var(--text); font-weight:600; }
+  tbody tr:hover{ background:var(--surface); }
+
+  .wide{ max-width:none !important; }
+
+  /* risk badge */
+  .badge{
+    display:inline-flex; align-items:center; gap:.35em; font-family:var(--font-mono);
+    font-size:.72rem; font-weight:700; letter-spacing:.03em; padding:.16em .55em; border-radius:5px;
+    border:1px solid currentColor; white-space:nowrap;
+  }
+  .badge::before{ content:""; width:.5em; height:.5em; border-radius:50%; background:currentColor; flex-shrink:0; }
+  .b-critical{ color:var(--risk-critical); background:color-mix(in srgb, var(--risk-critical) 12%, transparent); }
+  .b-high{ color:var(--risk-high); background:color-mix(in srgb, var(--risk-high) 12%, transparent); }
+  .b-medium{ color:var(--risk-medium); background:color-mix(in srgb, var(--risk-medium) 12%, transparent); }
+  .b-low{ color:var(--risk-low); background:color-mix(in srgb, var(--risk-low) 12%, transparent); }
+  .b-incomplete{ color:var(--risk-incomplete); background:color-mix(in srgb, var(--risk-incomplete) 12%, transparent); }
+
+  .statuschips{ display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0 1.4rem; }
+
+  .divider{ border:0; border-top:1px solid var(--border); margin:3rem 0; }
+
+  .qa{ margin:0 0 1.6rem; padding:1.1rem 1.3rem; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+  .qa .q{ font-weight:700; color:var(--text); margin-bottom:.5rem; }
+  .qa .meta{ font-family:var(--font-mono); font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.25rem; }
+  .qa .meta + .meta{ margin-top:.55rem; }
+  .qa p{ margin:0 0 .3rem; color:var(--text-dim); font-size:.94rem; }
+
+  .qa-group-title{
+    font-family:var(--font-mono); font-size:.85rem; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--accent); margin:2.2rem 0 1rem;
+  }
+
+  footer.doc-footer{
+    max-width:68ch; padding-top:2rem; border-top:1px solid var(--border);
+    font-size:.85rem; color:var(--muted); font-style:italic;
+  }
+
+  /* mobile */
+  @media (max-width:900px){
+    .navtoggle{ display:flex; }
+    .sidebar{
+      position:fixed; z-index:35; left:0; top:0; width:82vw; max-width:320px;
+      transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 40px rgba(0,0,0,.4);
+    }
+    .sidebar.open{ transform:translateX(0); }
+    .scrim{
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:30;
+    }
+    .scrim.show{ display:block; }
+    .main{ padding-top:4.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <button class="navtoggle" id="navtoggle" aria-label="Toggle section navigation" aria-expanded="false">≡</button>
+  <div class="scrim" id="scrim"></div>
+
+  <nav class="sidebar" id="sidebar" aria-label="Document sections">
+    <div class="sidebar-brand"><span class="mark">DE<span class="risk-r">SK</span></span></div>
+    <div class="sidebar-sub">Engineering Deep Dive</div>
+    <ul class="navlist">
+      <li><a href="#story"><span class="num">01</span>Story &amp; Business</a></li>
+      <li><a href="#architecture"><span class="num">02</span>Architecture</a></li>
+      <li><a href="#pipeline"><span class="num">03</span>Pipeline Flow</a></li>
+      <li><a href="#data-model"><span class="num">04</span>Data Modelling</a></li>
+      <li><a href="#tech"><span class="num">05</span>Tech Decisions</a></li>
+      <li><a href="#code"><span class="num">06</span>Code-Level</a></li>
+      <li><a href="#production"><span class="num">07</span>Production Thinking</a></li>
+      <li><a href="#system-design"><span class="num">08</span>System Design</a></li>
+      <li><a href="#alternatives"><span class="num">09</span>Alternatives</a></li>
+      <li><a href="#interview-bank"><span class="num">10</span>Common Questions</a></li>
+      <li><a href="#ownership"><span class="num">11</span>Ownership</a></li>
+      <li><a href="#recent-iteration"><span class="num">12</span>Recent Iteration</a></li>
+    </ul>
+    <div class="sidebar-foot">
+      Grounded in the real DESK codebase &amp; DECISIONS.md D001–D065.<br>Not a generic template.
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="doc-header">
+      <div class="eyebrow">DESK — DEpendency riSK · Engineering Deep Dive</div>
+      <h1>How DESK actually works, and why it's built this way.</h1>
+      <p class="lede">Built with AI assistance, and written the way I'd defend it myself — the architecture, the data model, the trade-offs, and the production incidents that actually happened, including the two times I built something and later removed it.</p>
+    </div>
+
+    <!-- 1 -->
+    <section class="doc-section" id="story">
+      <div class="sec-head"><span class="num">01</span><h2>Project Story &amp; Business Understanding</h2></div>
+
+      <h3>The elevator pitch</h3>
+      <div class="quote"><p>"DESK maps risk across the PyPI dependency ecosystem. It answers one question for any of the top 1,000 Python packages: if this package's maintainer disappeared tomorrow, or a critical CVE dropped in it today, how much of the ecosystem would be affected — and how would I know before it happened?"</p></div>
+
+      <h3>Why this problem exists</h3>
+      <p>Modern software is a thin layer on top of hundreds of transitive open-source dependencies, most maintained by unpaid volunteers with no SLA. Three concrete failure modes motivate DESK:</p>
+      <ol>
+        <li><strong>Maintainer abandonment</strong> — a package quietly stops getting commits. Nobody notices until a CVE goes unpatched for months.</li>
+        <li><strong>Silent CVE exposure</strong> — a critical vulnerability lands three dependency layers deep and no dashboard surfaces it.</li>
+        <li><strong>Blast radius blindness</strong> — you don't know that <code>urllib3</code> going down would break 200+ other packages, so you can't prioritize which risks actually matter.</li>
+      </ol>
+      <p>No existing tool scores <em>the whole ecosystem</em> this way. Tools like Snyk/Dependabot are project-first and reactive — they scan <em>your</em> <code>requirements.txt</code> after the fact. DESK is ecosystem-first and proactive.</p>
+
+      <h3>Who uses it, and the value</h3>
+      <p>Engineering leads doing dependency risk triage, security teams doing OSS due diligence, platform teams deciding which packages to standardize on. The value is one explainable score (0–10, labeled LOW/MEDIUM/HIGH/CRITICAL) with a visible component breakdown — not a black box — plus a visual blast-radius graph so impact is intuitive.</p>
+
+      <div class="callout">
+        <span class="eyebrow">In one sentence</span>
+        <p>"I built a data pipeline that ingests signals from four independent sources — PyPI, GitHub, a vulnerability database, and dependency graph data — for the top 1,000 PyPI packages, transforms them through dbt into a dimensional model, computes a weighted risk score with an explainable formula, and serves the result as a static, pre-computed dependency graph — no live backend, no per-request compute."</p>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="doc-section wide" id="architecture">
+      <div class="sec-head"><span class="num">02</span><h2>Complete Architecture Explanation</h2></div>
+
+      <h3>High-level architecture</h3>
+      <div class="codepanel">
+        <div class="tab"><span>ascii · system overview</span><span class="src">ARCHITECTURE.md</span></div>
+        <pre>                    GitHub Actions (orchestrator — cron, not Airflow)
+                              │
+        ┌─────────────────────┼─────────────────────┬──────────────────┐
+        ▼                     ▼                      ▼                  ▼
+  pypi_ingest.py       github_ingest.py        osv_ingest.py    deps_dev_ingest.py
+  (PyPI JSON API +     (GitHub GraphQL,        (OSV.dev CVE      (derives edges from
+   pypistats.org)       batched + token pool)    database)        requires_dist —
+        │                     │                      │              no external call)
+        └─────────────────────┴──────────┬───────────┴──────────────────┘
+                                          ▼
+                            DuckDB (in-process, ephemeral per run)
+                              desk_raw schema — append-only raw tables
+                                          │
+                                     dbt build
+                              staging → intermediate → marts
+                              desk_prod schema — query-ready tables
+                                          │
+                                  scoring/risk_score.py
+                        (reads marts, writes fact_risk_scores +
+                         appends 3 Parquet history files — committed to repo)
+                                          │
+                                export/graph_export.py
+                    (writes static JSON: graph.json, index.json,
+                     package/{name}.json → frontend/public/data/)
+                                          │
+                              git commit + vercel deploy --prod
+                                          │
+                          React + ReactFlow + dagre (static site, Vercel)
+                            no backend, no live API calls at runtime</pre>
+      </div>
+      <p>Every box above is a real file in the repo — this isn't conceptual, it's the literal execution order in <code>.github/workflows/daily_refresh.yml</code>.</p>
+
+      <h3>Components, responsibilities, and why each exists</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Component</th><th>What it does</th><th>Why it exists this way</th></tr></thead>
+        <tbody>
+          <tr><td>GitHub Actions (cron)</td><td>Orchestrates the whole pipeline, 02:07 UTC daily</td><td>No infra to run Airflow/Prefect on; a daily batch job doesn't need backfill/DAG-retry semantics</td></tr>
+          <tr><td>4 ingestion scripts</td><td>One per data source, each independently retryable</td><td>Isolates blast radius of a failure — one flaky API (OSV) shouldn't block the others</td></tr>
+          <tr><td>DuckDB</td><td>In-process OLAP DB, raw + prod schemas</td><td>Zero infra: no server, no account, no billing (replaced BigQuery — see Section 5)</td></tr>
+          <tr><td>dbt Core</td><td>SQL transform, staging → intermediate → marts</td><td>Explicit DAG via <code>ref()</code>, built-in schema testing, forces layered thinking</td></tr>
+          <tr><td>risk_score.py</td><td>Python scoring engine, not SQL</td><td>Edge-case logic (missing-data resolution, version-aware trend) is easier to write and unit-test in Python than dbt</td></tr>
+          <tr><td>graph_export.py</td><td>Converts scored data into static JSON</td><td>Decouples the frontend's data shape completely from the DB schema</td></tr>
+          <tr><td>React + ReactFlow</td><td>Renders the graph, static site</td><td>No backend needed — data is fully pre-computed once a day</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Communication between components</h3>
+      <p>There is <strong>no network call between pipeline stages</strong> — each stage reads/writes the same DuckDB file (<code>data/desk.duckdb</code>) on the GitHub Actions runner's local disk, sequentially, in one job. That's only safe because everything runs in one job, nothing else writes concurrently, and the file is ephemeral and gitignored. What persists across runs is <strong>committed to git</strong>: three Parquet history files and the exported JSON. Git is the persistence layer here, not a database.</p>
+
+      <h3>Advantages and limitations</h3>
+      <p><strong>Advantages:</strong> zero infra cost, zero DB ops, full historical audit trail via git log, zero cold start / zero backend attack surface on the frontend.</p>
+      <p><strong>Limitations — own these first:</strong></p>
+      <ul>
+        <li>Not real-time — up to 24h stale by design (an hourly event-trigger for this was actually built, then deliberately removed — see Section 12)</li>
+        <li>Single sequential job — if one ingestion step hangs, everything downstream waits (bounded by a 60-minute timeout)</li>
+        <li>DuckDB is single-writer, single-machine — fine at 1,000 packages, would need redesign at 100,000+</li>
+        <li>Git-as-storage grows ~5MB/year in Parquet history — fine for years, a long-term watch item</li>
+      </ul>
+    </section>
+
+    <!-- 3 -->
+    <section class="doc-section wide" id="pipeline">
+      <div class="sec-head"><span class="num">03</span><h2>End-to-End Data Pipeline Flow</h2></div>
+
+      <h3>Stage by stage</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Stage</th><th>Input</th><th>Processing</th><th>Output</th><th>Validation</th><th>Error handling</th></tr></thead>
+        <tbody>
+          <tr><td>Ingestion</td><td>4 external APIs</td><td>Fetch, normalize, extract GitHub URLs, decode CVSS vectors</td><td>Rows in <code>desk_raw.*</code></td><td><code>jsonschema</code> against a MINIMAL_SCHEMA per source, before any parsing</td><td>Exponential backoff w/ jitter on 429/5xx; non-retryable 4xx raise immediately; OSV step is <code>continue-on-error</code></td></tr>
+          <tr><td>Transform (dbt)</td><td><code>desk_raw.*</code></td><td>Dedup via ROW_NUMBER, join, aggregate</td><td><code>desk_prod</code> staging/intermediate/marts</td><td>dbt schema tests (not_null, unique, accepted_values)</td><td><code>dbt build</code> fails the step on any test failure — no bad data downstream</td></tr>
+          <tr><td>Scoring</td><td>Mart tables + 3 Parquet history files</td><td>Weighted formula, explicit missing-data resolution</td><td><code>fact_risk_scores</code> + 3 appended Parquet files</td><td>Deterministic function of validated inputs</td><td>Never fabricates a confident score from missing data — see 3.3</td></tr>
+          <tr><td>Export</td><td>Scored DuckDB tables</td><td>Build graph.json / index.json / one file per package</td><td>Static JSON under <code>frontend/public/data/</code></td><td><code>allow_nan=False</code> — a stray NaN raises loudly instead of shipping broken JSON</td><td>N/A</td></tr>
+          <tr><td>Deploy</td><td>Updated JSON</td><td>commit → rebase → push → vercel deploy</td><td>Live site updated</td><td>N/A</td><td>Rebase-before-push avoids the two-workflow race condition (D031/D034)</td></tr>
+          <tr><td>Consumption</td><td>Static JSON over CDN</td><td>index.json on load, graph.json on first search, package json on click</td><td>Rendered graph + detail panel</td><td>N/A</td><td>No server-side failure surface at all</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Walk one record end to end: <code>requests</code></h3>
+      <ol>
+        <li><strong>PyPI ingest</strong> — fetches <code>info.name</code>, <code>version</code>, <code>requires_dist</code>, <code>project_urls</code>. Finds <code>github.com/psf/requests</code> via <code>Source</code>. Downloads are rechecked every package, every run (D064) → pypistats gives <code>monthly_downloads = 98,000,000</code>. Row → <code>raw_pypi_packages</code>.</li>
+        <li><strong>GitHub ingest</strong> — batched GraphQL alias query against <code>psf/requests</code>: <code>pushedAt</code>, 90-day commit count, <code>isArchived: false</code>. Row → <code>raw_github_maintainers</code>.</li>
+        <li><strong>OSV ingest</strong> — phase 1 batch query returns known vuln IDs; phase 2 fetches full CVSS detail per unique ID (say, one historical HIGH, already patched). Row(s) → <code>raw_osv_cves</code>.</li>
+        <li><strong>deps_dev ingest</strong> (really: local <code>requires_dist</code> parser) — keeps only deps also in the top-1,000, flags <code>; extra ==</code> deps as optional. <code>urllib3</code>, <code>certifi</code>, <code>charset-normalizer</code>, <code>idna</code> become edges; each target's <code>dependent_count</code> increments.</li>
+        <li><strong>dbt staging</strong> — dedups to latest row; computes <code>days_since_last_commit</code> and <code>activity_label = 'ACTIVE'</code>.</li>
+        <li><strong>dbt intermediate</strong> — LEFT JOINs PyPI + GitHub on <code>github_repo_url</code>, sets <code>has_github_link = TRUE</code>; aggregates CVE counts and blast radius.</li>
+        <li><strong>dbt marts</strong> — one <code>dim_packages</code> row, four outbound <code>fact_dependencies</code> edges.</li>
+        <li><strong>Scoring</strong> — resolves <code>maintainer_status = LIVE</code> and <code>downloads_status = LIVE</code>. M_raw 0.0 (committed ≤30d) · C_raw small (one patched CVE) · D_raw 10.0 (blast radius &gt;200 → component 2.0) · DL_raw small. Final <span class="badge b-low">LOW</span> ≈ 1.8 — blast radius is high, but that's only 20% of the formula.</li>
+        <li><strong>Export</strong> — node in <code>graph.json</code> plus its own <code>package/requests.json</code> with full component breakdown, patched CVE history, 12-month trend, top-10 dependents.</li>
+        <li><strong>Frontend</strong> — search resolves via preloaded <code>index.json</code>; clicking the node lazy-loads <code>package/requests.json</code>. No API call, no server round trip beyond the static asset fetch.</li>
+      </ol>
+
+      <h3 id="carried-forward">The one piece of logic worth memorizing cold</h3>
+      <p>Part of every package's risk score depends on maintainer health — is a real person still actively looking after it? That means calling GitHub's API once a day for every package. One day, that call failed for a batch of packages — a rate-limit issue, nothing to do with the packages themselves. When data is missing, the code still had to put <em>some</em> number into the score, and the original logic filled in the worst possible value, as if "no data" meant "assume abandoned." Here's what that one shortcut did in production:</p>
+      <div class="quote"><p>A GitHub GraphQL batch failure caused missing maintainer data for <code>python-multipart</code>. The scoring code defaulted missing maintainer health to the <em>worst-case</em> score (10.0/10 — "assume abandoned"). That single defaulting decision spiked the package from 3.9 to 7.9 and flipped 42 packages to <span class="badge b-critical">CRITICAL</span> that weren't actually critical — pure data-gap noise dressed up as a real signal.</p></div>
+      <p>The fix wasn't "pick a better default" — the middle-ground option (default to a neutral value instead of worst-case) was tried and rejected too, because averaging in ignorance still quietly biases every score, just toward "looks safe" instead of "looks dangerous." The actual fix was to stop guessing entirely. Every score now carries an honest label telling you exactly how trustworthy that number is, alongside the number itself:</p>
+      <div class="statuschips">
+        <span class="badge b-low">LIVE</span>
+        <span class="badge b-medium">CARRIED_FORWARD</span>
+        <span class="badge b-incomplete">NEVER_VERIFIED</span>
+        <span class="badge b-incomplete">NO_GITHUB_LINK</span>
+      </div>
+      <ul>
+        <li><strong>LIVE</strong> — today's check actually succeeded. This number is fresh and real.</li>
+        <li><strong>CARRIED_FORWARD</strong> — today's check failed, but a real value exists from a previous successful check. Show <em>that</em> real number, with <em>its</em> real date — never stamp it with today's date.</li>
+        <li><strong>NEVER_VERIFIED</strong> — we've never once successfully gotten real data for this package. Say so directly, rather than showing a confident-looking score that's actually a guess.</li>
+        <li><strong>NO_GITHUB_LINK</strong> — a different case entirely: no repository exists to check. Scored neutral by design, not because data is missing.</li>
+      </ul>
+      <p class="eyebrow" style="margin-top:.6rem">Implemented in <code>risk_score.py::_resolve_maintainer</code> / <code>_resolve_downloads</code></p>
+      <p>This same pattern was independently re-applied to download counts (D059/D061) once the team recognized pypistats.org's rate limit meant not every package could get a live check per run — though the rotation workaround it originally required was later found unnecessary and removed entirely (D064, see Section 12).</p>
+      <div class="callout"><span class="eyebrow">Why this matters</span><p>There's a real difference between "missing data" and "bad data" — defaulting to honest uncertainty over confident guessing is the harder, more senior instinct, and it only came from actually getting burned by the alternative once.</p></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="doc-section wide" id="data-model">
+      <div class="sec-head"><span class="num">04</span><h2>Data Modelling Deep Dive</h2></div>
+
+      <h3>The layering</h3>
+      <div class="codepanel">
+        <div class="tab"><span>medallion-style layering</span><span class="src">dbt/models/</span></div>
+        <pre>desk_raw  (Bronze — append-only, one row per ingest run per entity)
+    │
+staging   (clean: dedup, type-cast, no business logic)
+    │
+intermediate  (join, aggregate — entity resolution)
+    │
+marts     (Silver/Gold — query-ready dimensional model)
+    │
+fact_risk_scores + fact_risk_score_history  (scoring output, NOT built by dbt)</pre>
+      </div>
+
+      <h3>Entities and relationships</h3>
+      <ul>
+        <li><strong>dim_packages</strong> (dimension, PK <code>package_name</code>) — one row per package.</li>
+        <li><strong>dim_maintainers</strong> (dimension, PK <code>github_repo_url</code>) — keyed by repo, not package, because the model correctly avoids assuming a 1:1 package↔repo relationship (monorepos exist).</li>
+        <li><strong>fact_dependencies</strong> (edge fact, grain: package → dependency pair) — classic many-to-many fact table.</li>
+        <li><strong>fact_risk_scores</strong> (current snapshot, truncate-and-replace) vs. <strong>fact_risk_score_history</strong> (append-only, grain: package × computed_at) — a Type-2-slowly-changing pattern implemented as current-snapshot + append-only-history, rather than literal <code>valid_from</code>/<code>valid_to</code> columns. Simpler for a daily batch use case where you only ever want "now" or "the full timeline."</li>
+      </ul>
+
+      <h3>Why this schema and not another</h3>
+      <p><strong>Why split <code>dim_packages</code> and <code>dim_maintainers</code>?</strong> A package can have <code>has_github_link = FALSE</code>. Splitting means "no maintainer data" is a natural LEFT JOIN NULL, not a table full of sentinel values.</p>
+      <p><strong>Why FULL OUTER JOIN, not LEFT JOIN, in <code>int_dependency_metrics</code>?</strong></p>
+      <div class="codepanel">
+        <div class="tab"><span>sql</span><span class="src">dbt/models/intermediate/int_dependency_metrics.sql</span></div>
+        <pre>FROM dep_edges e
+FULL OUTER JOIN {{ ref('stg_deps_dependents') }} d
+    ON e.package_name = d.package_name</pre>
+      </div>
+      <p>Packages with zero outgoing dependencies but nonzero incoming dependents (leaf packages like <code>certifi</code>, <code>six</code>, <code>idna</code>) would silently disappear from a <code>LEFT JOIN FROM dep_edges</code> — the SQL comment states explicitly that a LEFT JOIN would "silently zero-out their depth component." A real bug anticipated and designed around, not discovered in production.</p>
+
+      <h3>Data warehouse concepts present</h3>
+      <ul>
+        <li>Star-schema-like mart layer: facts (<code>fact_dependencies</code>, <code>fact_risk_scores</code>) + dimensions (<code>dim_packages</code>, <code>dim_maintainers</code>)</li>
+        <li>Slowly-changing history via append-only fact + current-snapshot fact</li>
+        <li>Raw layer is append-only and immutable — classic "raw zone never gets UPDATEd" even though the engine (DuckDB) isn't a data lake</li>
+        <li>Idempotent, full-rebuild transforms — no incremental merge logic, the right call at this volume</li>
+        <li>Deliberate shift from <strong>normalized</strong> (marts, for correctness) to <strong>denormalized</strong> (per-package JSON, for read performance) — the classic OLTP/OLAP/serving-layer tradeoff</li>
+      </ul>
+    </section>
+
+    <!-- 5 -->
+    <section class="doc-section wide" id="tech">
+      <div class="sec-head"><span class="num">05</span><h2>Technology Decision Analysis</h2></div>
+      <p>Every row below is backed by a real locked decision in <code>DECISIONS.md</code>.</p>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Technology</th><th>Why selected</th><th>Alternative rejected</th><th>Trade-off accepted</th></tr></thead>
+        <tbody>
+          <tr><td>DuckDB + Parquet <span class="eyebrow">D057</span></td><td>Runs in-process in the CI runner — no server, account, or billing</td><td>BigQuery (original design) — needs a GCP account, billing, service-account key rotation</td><td>DB file is ephemeral per CI run — the scheduler queue must be reseeded from scratch every run</td></tr>
+          <tr><td>dbt Core</td><td>Explicit DAG via <code>ref()</code>, built-in schema testing, forces staging/intermediate/marts separation</td><td>Hand-written SQL scripts — no dependency ordering or test framework</td><td>Extra tooling layer for 11 models — justified as a transferable, real-world skill</td></tr>
+          <tr><td>GitHub Actions</td><td>Free, already hosts the code, cron + workflow_dispatch covers every trigger needed</td><td>Airflow / Prefect — need hosted scheduler + worker infra</td><td>No DAG visualization, no backfill tooling — fine, the pipeline is linear not branching</td></tr>
+          <tr><td>React + ReactFlow + dagre</td><td>Pan/zoom/interaction out of the box; dagre auto-computes hierarchical layout</td><td>D3.js directly (full control, hand-built drag/zoom/hit-testing) / Cytoscape.js (less idiomatic in React)</td><td>DOM-based rendering doesn't scale to 1,000s of visible nodes — mitigated by never rendering more than a capped local subgraph</td></tr>
+          <tr><td>Static JSON + CDN</td><td>Data changes once a day — a live API answering a constant question is pure overhead</td><td>Small backend + database — a server to run, patch, and secure for data that's static for 24h</td><td>No ad-hoc querying — every query shape the frontend needs must be pre-baked at export time</td></tr>
+          <tr><td>OSV.dev</td><td>Aggregates GitHub Advisories + NVD + PyPA into one schema, free, PyPI-complete</td><td>GitHub Security Advisory API directly — misses NVD/PyPA-only records</td><td>Single point of truth dependency — mitigated by <code>continue-on-error: true</code></td></tr>
+          <tr><td><code>cvss</code> library <span class="eyebrow">D062</span></td><td>OSV's severity score is a <em>vector string</em>, not a float — naive <code>float()</code> silently returned <code>None</code> for every record. This library decodes CVSS2/3/4 vectors correctly</td><td>Hand-write a spec-compliant CVSS parser</td><td>One more pinned dependency — flagged explicitly before adding, per project convention</td></tr>
+          <tr><td>GitHub GraphQL (not REST)</td><td>Alias-based batching — 20 repos per request instead of 1,000 individual REST calls</td><td>GitHub REST — no batching primitive, N calls instead of N/20</td><td>Messier partial-failure semantics (errors embedded in a 200 response) — caused a real incident, see Section 7</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout"><span class="eyebrow">One-liner: "why not real-time?"</span><p>"The risk signals this project scores — commit cadence, CVE publication, download trend — don't change meaningfully within a day. A batch pipeline computing a daily snapshot captures essentially all the signal a streaming system would, at a fraction of the operational complexity."</p></div>
+    </section>
+
+    <!-- 6 -->
+    <section class="doc-section" id="code">
+      <div class="sec-head"><span class="num">06</span><h2>Code-Level Understanding</h2></div>
+
+      <h3>Design patterns actually in use</h3>
+      <ul>
+        <li><strong>Retry-with-backoff as a higher-order function</strong> (<code>backoff.py</code>) — wraps any callable with exponential backoff + jitter, distinguishing retryable (429/5xx/timeout) from non-retryable (other 4xx) failures. A retry policy, not a full circuit breaker — a reasonable scope call for a daily batch job.</li>
+        <li><strong>State machine</strong> — <code>scheduler_queue.status</code>: <code>pending → running → complete/error</code>, giving every run a full audit trail.</li>
+        <li><strong>Token pool with a dormant scale-out seam</strong> — <code>TokenPool.rotate()</code> exists but is never called in MVP. Build the seam now, wire it up later — visible forward design without premature complexity.</li>
+        <li><strong>Provenance tagging</strong> — the <code>*_status</code> fields are an honest-null pattern: never let a consumer confuse "we checked and it's fine" with "we didn't check."</li>
+        <li><strong>NaN sanitization at the JSON boundary</strong> — <code>_nan()</code> uses the <code>NaN != NaN</code> identity trick, paired with <code>allow_nan=False</code> so a stray NaN raises loudly at export time instead of shipping invalid JSON to the browser. Fixed twice — first pass covered raw rows, second pass discovered pandas <code>.df()</code> reverts <code>None</code> back to NaN on read. A good story about incomplete first fixes and verifying assumptions.</li>
+      </ul>
+
+      <h3>Error handling — three tiers, matched to blast radius</h3>
+      <ol>
+        <li>Per-request retry (transient network / rate limits)</li>
+        <li>Per-package isolation (one bad package doesn't kill the run; marked <code>error</code> and skipped)</li>
+        <li>Per-source pipeline isolation (<code>continue-on-error</code> on the OSV step only)</li>
+      </ol>
+      <p>Notably, <strong>not everything is soft-failed</strong>: <code>dbt build</code>/<code>dbt test</code> failures hard-fail the pipeline, because bad data reaching <code>fact_risk_scores</code> is worse than a delayed run. Soft-fail on ingestion, hard-fail on data-quality gates — a deliberate asymmetry.</p>
+
+      <h3>Configuration &amp; logging</h3>
+      <p>Environment-variable driven throughout (<code>DESK_DB_PATH</code>, <code>RISK_SCORE_VERSION</code>, <code>GITHUB_TOKENS</code>...) — no hardcoded magic numbers. <code>RISK_SCORE_VERSION</code> is a first-class knob specifically because bumping the formula must invalidate trend comparisons. Structured leveled logging (<code>logging</code>, never <code>print()</code>) with greppable context, e.g. <code>SCHEMA_CHANGE_DETECTED source=%s field=%s</code>, plus progress logging every 100 items so a hung run is diagnosable mid-flight.</p>
+    </section>
+
+    <!-- 7 -->
+    <section class="doc-section wide" id="production">
+      <div class="sec-head"><span class="num">07</span><h2>Production-Level Thinking</h2></div>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Scenario</th><th>Impact</th><th>Solution as actually built</th><th>Prevention</th></tr></thead>
+        <tbody>
+          <tr><td>Source API schema changes</td><td>Silent NULLs or mid-run crash</td><td><code>jsonschema</code> validation before parsing (D015); raise + fail the step → GitHub email</td><td>Weekly <code>schema_monitor.yml</code> proactively checks all 4 APIs, independent of the daily run</td></tr>
+          <tr><td>One bad record</td><td>Could crash the whole batch</td><td>Per-package try/except, <code>mark_error()</code>, continue</td><td>Batch isolation (D020 — previously lost all 50 in a batch on one bad record)</td></tr>
+          <tr><td>Pipeline stops halfway</td><td>Partial raw data, downstream never runs</td><td>60-min timeout guard; DuckDB file is ephemeral, no persistent corrupt state</td><td>Concurrency group queues instead of cancelling a running job</td></tr>
+          <tr><td>Duplicate data</td><td>Wrong aggregates if undeduplicated</td><td><code>ROW_NUMBER() PARTITION BY ... ORDER BY ingested_at DESC = 1</code> in every staging model</td><td>Append-only raw + dedup-in-staging — duplicate ingestion is self-healing</td></tr>
+          <tr><td>GitHub rate limiting</td><td>Batches stall or fail</td><td>Primary limit: sleep until reset. Secondary abuse-detection 403 (D060): detected via <code>Retry-After</code>, retried up to 3x</td><td>Real incident: secondary limit wasn't retryable by original design — cascaded to 767/967 lost packages in one run</td></tr>
+          <tr><td>Data volume 10x+</td><td>60-min GHA timeout, GraphQL limits, DuckDB memory</td><td>Not yet hit</td><td><code>scheduler_queue.priority</code> already exists as a designed-but-dormant seam</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>The best "tell me about a production incident" story here</h3>
+      <div class="quote">
+        <p>"We had a false CRITICAL alert spike — 42 packages jumped to CRITICAL overnight. Root cause: a GitHub ingestion failure meant maintainer data was missing for those packages, and the scoring code's fallback for missing data was the <em>worst-case</em> score (10/10, 'assume abandoned'). I redesigned the pipeline to explicitly track data provenance — LIVE, CARRIED_FORWARD, or NEVER_VERIFIED, shown as DATA_INCOMPLETE, never as a confident score."</p>
+        <p>"I actually tried a middle-ground fix first — defaulting to a neutral score instead of worst-case — and rejected it myself, because averaging in ignorance still quietly biases every estimate toward 'looks safe,' just in the opposite direction. The real fix was refusing to guess at all."</p>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="doc-section" id="system-design">
+      <div class="sec-head"><span class="num">08</span><h2>System Design Thinking</h2></div>
+
+      <h3>"How would this handle 10x growth (10,000 packages)?"</h3>
+      <p>Honest answer: it breaks first at the <strong>GitHub Actions 60-minute timeout and GraphQL rate limits</strong>, not at DuckDB.</p>
+      <ul>
+        <li><strong>Ingestion</strong> — <code>scheduler_queue.priority</code> already exists (currently unused). At 10x, priority-tiered refresh becomes real: top packages daily, the rest weekly on rotation — extending the same pattern already proven for download counts.</li>
+        <li><strong>GitHub API</strong> — <code>TokenPool.rotate()</code> already exists, dormant. Multiple PATs round-robin'd multiply the effective rate ceiling.</li>
+        <li><strong>Orchestration</strong> — one 60-minute job becomes sharded parallel jobs (GHA matrix builds), merged before transform. This is the point a real orchestrator starts earning its cost.</li>
+        <li><strong>DuckDB</strong> — still fine at 10,000 rows/day; becomes a real constraint near millions of packages, where a distributed warehouse is the right call.</li>
+      </ul>
+
+      <h3>"Batch vs. streaming — would you ever go streaming?"</h3>
+      <p>No, and defending that "no" is the actual skill being tested. Commit cadence, CVE publication, download trend don't change on sub-daily timescales. An hourly event-driven trigger for this was actually built and shipped — then removed (D065) once it became clear nobody was relying on same-day freshness yet. The right amount of real-time here turned out to be zero, once tested against actual usage instead of assumed in advance. Full story in Section 12.</p>
+
+      <h3>Partitioning, caching, monitoring, security, availability</h3>
+      <ul>
+        <li><strong>Partitioning</strong> — raw tables conceptually partitioned by <code>ingested_at</code></li>
+        <li><strong>Caching</strong> — the static JSON export <em>is</em> the cache, served from Vercel's CDN edge</li>
+        <li><strong>Monitoring</strong> — weekly proactive schema drift check + GitHub's default failure emails; real alerting (Slack/webhook) is a named next step</li>
+        <li><strong>Security</strong> — post-DuckDB migration there are no database credentials at all — smaller attack surface by construction</li>
+        <li><strong>Availability</strong> — frontend availability = Vercel's CDN uptime, fully decoupled from pipeline availability; a failed run means stale data, never downtime</li>
+      </ul>
+    </section>
+
+    <!-- 9 -->
+    <section class="doc-section wide" id="alternatives">
+      <div class="sec-head"><span class="num">09</span><h2>Alternative Architecture Discussion</h2></div>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Decision</th><th>Alternative</th><th>Benefit of alternative</th><th>Why current approach was reasonable</th></tr></thead>
+        <tbody>
+          <tr><td>DuckDB + Parquet, ephemeral</td><td>Managed warehouse (BigQuery/Snowflake)</td><td>True persistence, concurrent access, scales past one machine</td><td>No concurrent access is ever needed (single sequential CI job); ephemeral + git history achieves durability without infra</td></tr>
+          <tr><td>GitHub Actions cron</td><td>Airflow / Dagster / Prefect</td><td>DAG visualization, task retries, backfill tooling</td><td>The DAG is linear with 6 steps — a visual DAG tool solves a problem this pipeline doesn't have yet</td></tr>
+          <tr><td>Python scoring script</td><td>A dbt model with CASE WHEN</td><td>Everything declarative, one lineage</td><td>Provenance resolution with Parquet cross-referencing is awkward in pure SQL and untestable — Python gives unit-testable functions</td></tr>
+          <tr><td>Static JSON, no backend</td><td>REST/GraphQL API + database</td><td>Ad-hoc querying, real-time freshness</td><td>Every query shape the frontend needs is already known ahead of time — pre-computing wins</td></tr>
+          <tr><td>Local <code>requires_dist</code> parsing <span class="eyebrow">D018</span></td><td>Live deps.dev API calls (original design)</td><td>Would capture transitive (depth 2+) deps too</td><td>deps.dev's v3alpha <code>/dependencies</code> endpoint 404'd for all PyPI packages — didn't work as documented; local parsing is more reliable at the cost of depth-1 only</td></tr>
+          <tr><td>Local subgraph rendering (capped neighbors)</td><td>Render the full 1,000-node graph at once</td><td>See the whole ecosystem in one view</td><td>ReactFlow's DOM rendering degrades past a few hundred nodes; a 1,000-node hairball is also cognitively useless</td></tr>
+          <tr><td>Daily-only refresh <span class="eyebrow">D065</span></td><td>Keep the hourly event-trigger for ~50 priority packages</td><td>Same-day freshness instead of up-to-24h staleness for the highest-traffic packages</td><td>Removed after honestly measuring the value: no user was relying on it yet, it had already caused a real bug (D034 git-push race), and the daily run already covers all 1,000 packages including those 50 anyway</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout"><span class="eyebrow">The one alternative worth raising unprompted</span><p>"Why not just scan <code>requirements.txt</code> like Snyk/Dependabot?" — because that's reactive per-project scanning; DESK is proactive per-ecosystem scoring. They're complementary: Dependabot tells you about CVEs in packages you already use; DESK tells you which packages are becoming risky before you add them, by scoring maintainer health as a leading indicator.</p></div>
+    </section>
+
+    <!-- 10 -->
+    <section class="doc-section" id="interview-bank">
+      <div class="sec-head"><span class="num">10</span><h2>Common Questions</h2></div>
+
+      <div class="qa">
+        <div class="q">How do you determine the top 1,000 packages?</div>
+        <p>From <a href="https://hugovk.github.io/top-pypi-packages/" target="_blank" rel="noopener">hugovk's top-pypi-packages</a> dataset — a public, regularly-updated ranking of PyPI packages by download volume over the trailing 30 days. The pipeline re-fetches this list and re-seeds the package queue from it on every single run, so the roster of "top 1,000" isn't fixed at launch — it shifts over time exactly as real-world download patterns shift.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Is there a backend?</div>
+        <p>Not at request time — no. The site you're looking at is a static React app reading pre-computed JSON files from Vercel's CDN; there is no server answering your search queries. What does the work instead is a scheduled batch pipeline (GitHub Actions, once daily) that ingests from four APIs, transforms the data with dbt, computes risk scores, and exports the result as static files. That pipeline is a real backend in the "does compute, owns data" sense — it's just not one that serves live requests. A request-serving backend would only become necessary if DESK needed live per-user state (accounts, saved watchlists), on-demand scoring of packages outside the top 1,000, or push notifications — none of which are in scope right now.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Walk me through the architecture.</div>
+        <p>Four independent ingestion scripts (PyPI, GitHub, OSV.dev, and a local dependency-graph derivation) write into DuckDB. dbt transforms that through staging → intermediate → mart layers. A Python scoring script reads the marts and computes a weighted risk score. An export script turns the scored data into static JSON. The whole thing runs once a day as one GitHub Actions job — see the diagram in Section 2.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Why DuckDB instead of a traditional database?</div>
+        <p>Zero infrastructure — it runs in-process inside the CI job, with no server, account, or billing to manage. It replaced an original BigQuery design specifically to remove GCP credential-management overhead (D057). The trade-off is no concurrent multi-writer access and no persistence across runs without an explicit export step — both non-issues here, since the pipeline is single-writer and strictly sequential.</p>
+      </div>
+      <div class="qa">
+        <div class="q">How does the pipeline handle failures?</div>
+        <p>Three tiers: per-request retry with backoff, per-package isolation (one bad record doesn't take down the batch — D020), and per-source isolation for the flakiest API. dbt test failures are the one place that hard-fails the whole run on purpose — bad data reaching the scoring layer is worse than a delayed run.</p>
+      </div>
+      <div class="qa">
+        <div class="q">How do you maintain data quality?</div>
+        <p>Schema validation at the ingestion boundary, a weekly proactive schema-drift check against all four upstream APIs, dbt schema tests on every mart table, and the LIVE / CARRIED_FORWARD / NEVER_VERIFIED provenance pattern (Section 3) so a missing value is never silently treated as a real one.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Why static JSON instead of a live API?</div>
+        <p>The data changes once a day. A live API answering a constant 24-hour question is overhead with no upside — every query shape the frontend needs is already known ahead of time and pre-computed at export.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Why not make this real-time end to end?</div>
+        <p>The underlying signals — commit cadence, CVE publication, download trend — don't change on a sub-daily timescale. An hourly event-trigger for high-traffic packages was actually built and run in production for two months, then removed (Section 12) once it was clear nobody needed same-day freshness yet. "No" was tested against real usage, not just assumed.</p>
+      </div>
+      <div class="qa">
+        <div class="q">What are the current limitations?</div>
+        <p>Up to 24 hours of staleness by design. Single-sequential execution — no horizontal scale-out yet. Git-as-persistence for history files, which won't scale indefinitely. DuckDB is single-machine. Blast radius only counts direct (depth-1) dependents, not the true transitive chain. Each of these has a designed-but-dormant seam for the point it'd actually need fixing (Section 8, Section 11) — not a gap that was missed, a line that hasn't been crossed yet.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Tell me about a bug you found and fixed.</div>
+        <p>The false-CRITICAL missing-data incident (Section 7) is the sharpest one: a GitHub ingestion failure silently spiked 42 packages to CRITICAL because missing data defaulted to a worst-case score. Caught by reviewing pipeline output and cross-checking it against expectations, not by an automated alert — that's a real gap, not a solved one. Two others worth knowing: a GraphQL "resource limits exceeded" response logged as a warning instead of raised, silently losing maintainer data for 762 of 900 packages in one run; and a git-push race condition between two workflows writing to the same branch, fixed with a shared concurrency group.</p>
+      </div>
+      <div class="qa">
+        <div class="q">Tell me about a time you removed something you built.</div>
+        <p>The hourly event-trigger (Section 12) — it worked, it was real engineering, and it still got cut. No live usage depended on it, it had already caused a real concurrency bug, and the daily pipeline already covered everything it watched for. Keeping it would have mainly demonstrated "this can build event-driven triggers" rather than solved a live problem — the weakest possible reason to keep a piece of infrastructure around.</p>
+      </div>
+      <div class="qa">
+        <div class="q">How would this scale to 10,000 packages?</div>
+        <p>It breaks first at the GitHub Actions 60-minute timeout and GraphQL rate limits, not at DuckDB. The fixes are already designed as dormant seams rather than built: <code>scheduler_queue.priority</code> for tiered refresh (top packages daily, the rest on rotation), <code>TokenPool.rotate()</code> for multi-token GitHub throughput, and sharded parallel ingestion jobs merged before transform.</p>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section class="doc-section" id="ownership">
+      <div class="sec-head"><span class="num">11</span><h2>Retrospective</h2></div>
+
+      <h3>What I'd keep</h3>
+      <ul>
+        <li>DuckDB over BigQuery — the infra/ops trade-off was correct for the actual concurrency needs here, which is none</li>
+        <li>Labeling every score with how trustworthy it is — LIVE, CARRIED_FORWARD, or NEVER_VERIFIED (Section 3) — instead of quietly guessing when data is missing. This came directly from a real incident where a missing-data guess caused a false alarm, and fixing it properly (rather than picking a slightly-less-wrong guess) is the single decision I'd point to first as production-grade thinking.</li>
+        <li>Deriving dependencies from <code>requires_dist</code> instead of depending on deps.dev's broken endpoint — a pragmatic adaptation when an external dependency didn't work as advertised</li>
+        <li>Retiring the download-count rotation and the hourly event-trigger (Section 12) — both were correct calls once tested against reality, not mistakes to walk back from</li>
+      </ul>
+
+      <h3>Trade-offs still standing, and why</h3>
+      <ul>
+        <li>Daily batch freshness over real-time — correct for signals that don't move sub-daily; would only revisit if the scope expanded to faster-moving data</li>
+        <li>Single-sequential-job pipeline — simplest thing that works at 1,000 packages; no parallelism yet because nothing has demanded it</li>
+        <li>Blast radius only counts direct (depth-1) dependents within the top 1,000 — true transitive blast radius needs a working deps.dev integration or a recursive resolution pass, neither built yet</li>
+        <li>No real alerting beyond GitHub's default failure emails — a known gap, not an oversight</li>
+      </ul>
+
+      <h3>What I'd build next, in priority order</h3>
+      <ol>
+        <li>Wire up <code>scheduler_queue.priority</code> and <code>TokenPool.rotate()</code> — both already designed, neither load-bearing yet</li>
+        <li>Real alerting (Slack/webhook on failure) instead of GitHub's email default</li>
+        <li>Transitive blast radius (depth 2+) — the current model explicitly doesn't attempt this</li>
+        <li>A "what changed since yesterday" diff view — the Parquet history already contains everything needed; it's a query away, not a redesign</li>
+      </ol>
+
+      <div class="quote"><p>"I designed the data model, the ingestion resilience strategy, and the scoring formula's edge-case handling — including redesigning it after a real incident taught me that defaulting missing data to a 'safe' or 'neutral' value is itself a bias, not a fix. I made and documented the storage migration from BigQuery to DuckDB when the ops cost stopped being worth it, and I removed two pieces of my own working infrastructure once the evidence said they weren't earning their keep. Every decision here has a reason behind it — including the ones to undo an earlier decision."</p></div>
+    </section>
+
+    <!-- 12 -->
+    <section class="doc-section wide" id="recent-iteration">
+      <div class="sec-head"><span class="num">12</span><h2>Recent Iteration — Reversing My Own Decisions When the Evidence Said So</h2></div>
+
+      <p>The two stories below both happened in the same week. Neither is a "we shipped a feature" story — they're "we built something real, then had the discipline to correct it once the evidence came in" stories. That's a different skill than building, and it's the one most portfolios don't show.</p>
+
+      <h3>The download-rotation saga — three attempts to the same fix</h3>
+      <p><strong>D061 — built a workaround for a limit that wasn't real.</strong> pypistats.org's download-count endpoint has a 30-requests-per-minute limit. With 1,000 packages to check and no obvious way around it, the fix was a rotation: check ~40 least-recently-checked packages per run, full rotation every 3-4 weeks, carry the last real value forward the rest of the time. It worked. It shipped.</p>
+      <p><strong>D063 — found a bug hiding inside the fix.</strong> Reviewing the code a day later, the rotation's "is this package due for a recheck" logic ran <em>after</em> an unrelated "skip if the PyPI version hasn't changed" check. A package due for its rotation slot could get skipped anyway if its version happened to be unchanged — silently re-stamping a stale download count as fresh. Two independent pieces of "skip this work" logic had quietly combined into "skipped more often than either one intended." Fixed by reordering the checks.</p>
+      <p><strong>D064 — realized the original constraint was mis-read, and undid the whole workaround.</strong> Re-examining the real numbers: 30 requests/minute is <em>1,800 requests an hour</em>. Pacing 1,000 requests 3 seconds apart takes about 50 minutes — comfortably inside the limit. The actual constraint was never "you can't check 1,000 packages a day," it was "don't burst them all in 4 seconds," which the original code had done by accident. The entire rotation mechanism — the thing built in D061 and just carefully debugged in D063 — got deleted. Every package's download count is now rechecked every single day.</p>
+      <div class="callout"><span class="eyebrow">Why this is worth telling</span><p>The instinct to defend a fix once you've built and debugged it is real — by D063 there was already sunk effort in making the rotation correct. The harder, better move was going back to first principles on the constraint itself, discovering the workaround was solving the wrong problem, and deleting it rather than polishing it further.</p></div>
+
+      <h3>Retiring the hourly event-trigger (D065)</h3>
+      <p><code>pypi_event_trigger.yml</code> ran every hour, checking PyPI's RSS feed for new releases of ~50 high-traffic packages (requests, numpy, django, and similar). If one had a new version, it triggered the full pipeline immediately — so a change to a widely-used package showed up within the hour instead of waiting for the next 02:07 UTC daily run. It had already caused a real production bug (D034 — two workflows writing to the same git branch without coordination, fixed with a shared concurrency group) and had been running in production for two months.</p>
+      <p>Reviewing it fresh: the daily run already covers all 1,000 packages, including those same 50, once every 24 hours regardless. The hourly job's entire value was shrinking the staleness window from 24 hours down to about one — for a project where no one is refreshing the page hourly waiting for that difference. Nobody was relying on it. Keeping it mostly proved "this can build event-driven triggers," which is the weakest possible reason to keep a piece of infrastructure that had already caused one bug.</p>
+      <p>It was removed — the workflow file deleted, every doc that described it as current state corrected, the decision logged as D065, and the 511 leftover GitHub Actions run records for it cleaned out of the repo's history.</p>
+      <div class="callout"><span class="eyebrow">The actual lesson</span><p>Not every real capability is worth keeping. The question isn't "does this work" — the rotation worked, the trigger worked — it's "is anything actually depending on this, right now." When the honest answer was no twice in the same week, the right move both times was deletion, not defense.</p></div>
+    </section>
+
+    <footer class="doc-footer">
+      Compiled from the actual DESK codebase and DECISIONS.md (D001–D065) — every claim traces to a real file, a real decision entry, or a real incident.
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  (function(){
+    var toggle = document.getElementById('navtoggle');
+    var sidebar = document.getElementById('sidebar');
+    var scrim = document.getElementById('scrim');
+    function closeNav(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); toggle.setAttribute('aria-expanded','false'); }
+    function openNav(){ sidebar.classList.add('open'); scrim.classList.add('show'); toggle.setAttribute('aria-expanded','true'); }
+    toggle.addEventListener('click', function(){ sidebar.classList.contains('open') ? closeNav() : openNav(); });
+    scrim.addEventListener('click', closeNav);
+    sidebar.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', closeNav); });
+
+    var links = Array.prototype.slice.call(document.querySelectorAll('.navlist a'));
+    var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+    if ('IntersectionObserver' in window){
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          var idx = sections.indexOf(entry.target);
+          if (idx === -1) return;
+          if (entry.isIntersecting){
+            links.forEach(function(l){ l.classList.remove('active'); });
+            links[idx].classList.add('active');
+          }
+        });
+      }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+      sections.forEach(function(s){ if (s) io.observe(s); });
+    }
+  })();
+</script>
+</body>
 </html>
