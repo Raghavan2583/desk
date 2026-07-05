@@ -1,6 +1,6 @@
 # DESK — DEpendency riSK
 # Project context for Cricket Crew
-# Phase: Operate | Updated: 2026-07-04
+# Phase: Operate | Updated: 2026-07-05
 # Rule: NEVER exceed 150 lines.
 
 ## What DESK Is
@@ -34,17 +34,22 @@ Frontend    : https://frontend-sand-seven-57.vercel.app
 Repo        : https://github.com/Raghavan2583/desk
 Pipeline    : daily_refresh.yml — 02:07 UTC daily (deploys Vercel directly — D055)
 Monitor     : schema_monitor.yml — Mondays 08:17 UTC
-Documentary : https://documentary-site-xi.vercel.app
+Deep Dive   : https://documentary-site-xi.vercel.app (engineering deep-dive, replaced old 8-episode documentary 2026-07-05)
 
 ## Last Session
-2026-07-04 — Cleared the pending-changes backlog (8 commits), shipped a downloads-freshness
-UI feature, fixed a stale-orphan-files export bug, and retired D061's 40/day download
-rotation in favor of checking all 1,000 packages daily (D064).
+2026-07-05 — Verified D064's first daily run (success, 1h25m). Public-repo cleanup (deleted
+stale docs, added README, purged 511 dead Actions runs). Retired pypi_event_trigger.yml
+(D065) after it proved redundant and already-buggy. Rebuilt the documentary as a real
+engineering deep-dive (public + private versions), deployed live. Fixed two real product
+bugs found by reviewing a live package page: ABANDONED label conflated confirmed-archived
+with inferred-inactive (D066, split into DORMANT/ARCHIVED), and the score modal displayed
+the wrong weight percentages (D067).
 
 ## Next Action
-Check last night's (2026-07-05) 02:07 UTC daily_refresh.yml run — first real test of D064.
-Confirm it completed within the new 120-min timeout, check actual duration, and spot-check
-absl-py on the live site (was CARRIED_FORWARD, should now show LIVE with today's date).
+After tomorrow's 02:07 UTC run recomputes activity_label from raw data, confirm jinja2 (and
+any other 365+ day, non-archived package) now shows DORMANT instead of ABANDONED on the live
+site — D066's data-side change hasn't been observed live yet, only the frontend code deploy
+has.
   Deck URL: https://desk-deck.vercel.app
   Local dev: cd desk-deck && CHOKIDAR_USEPOLLING=true npx vite --port 5174
 
