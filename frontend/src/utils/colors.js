@@ -15,10 +15,13 @@ export const TREND_COLORS = {
 }
 
 export const ACTIVITY_COLORS = {
-  ACTIVE:    '#3FB950',
-  SLOW:      '#FFD700',
-  STALE:     '#FF8C00',
-  ABANDONED: '#FF4444',
+  ACTIVE:   '#3FB950',
+  SLOW:     '#FFD700',
+  STALE:    '#FF8C00',
+  // DORMANT is inferred (no commits in 365+ days) — serious, but not confirmed.
+  // ARCHIVED is GitHub-confirmed (is_archived=true) — the stronger, earned claim.
+  DORMANT:  '#E85D4A',
+  ARCHIVED: '#FF4444',
 }
 
 export const C = {

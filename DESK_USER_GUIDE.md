@@ -42,7 +42,7 @@ Shows the human behind the package:
 - **Last commit** — days since anyone touched the code
 - **Commits (90d)** — activity level in the past 3 months
 - **Contributors** — how many people maintain it
-- **Status badge** — ACTIVE / SLOW / STALE / ABANDONED
+- **Status badge** — ACTIVE / SLOW / STALE / DORMANT / ARCHIVED. DORMANT means no commits in 1+ year (inferred — could mean neglected, or just stable and feature-complete). ARCHIVED means GitHub itself confirms the repository is read-only.
 
 ### CVE List
 All known security vulnerabilities (CRITICAL → HIGH → MEDIUM → LOW), with fix version where available.

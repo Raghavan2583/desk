@@ -7,8 +7,8 @@ import { timeAgo } from '../utils/format'
 const TREND_ARROW = { RISING: '↑', FALLING: '↓', STABLE: '→' }
 
 const SCORE_FACTORS = [
-  { label:'Vulnerabilities',   weight:'50%', key:'cve',        color:RISK_COLORS.CRITICAL, desc:'Known security flaws (CVEs) weighted by severity. Unpatched critical CVEs carry the most weight. A single unpatched critical CVE can push a package to CRITICAL risk.' },
-  { label:'Maintainer Health', weight:'20%', key:'maintainer', color:RISK_COLORS.HIGH,     desc:'How recently the maintainer has released code updates. Packages with no commits in 2+ years are treated as potentially abandoned and score highest risk.' },
+  { label:'Maintainer Health', weight:'40%', key:'maintainer', color:RISK_COLORS.HIGH,     desc:'How recently the maintainer has released code updates. Packages with no commits in 1+ year are flagged DORMANT; GitHub-confirmed archived repos are flagged ARCHIVED. Either scores highest risk on this factor.' },
+  { label:'Vulnerabilities',   weight:'30%', key:'cve',        color:RISK_COLORS.CRITICAL, desc:'Known security flaws (CVEs) weighted by severity. Unpatched critical CVEs carry the most weight. A single unpatched critical CVE can push a package to CRITICAL risk.' },
   { label:'Blast Radius',      weight:'20%', key:'depth',      color:'#00D4FF',            desc:'How many other packages depend on this one. A widely-used package that goes bad affects a much larger part of the ecosystem.' },
   { label:'Trend',             weight:'10%', key:'downloads',  color:RISK_COLORS.LOW,      desc:'Whether the risk score has been rising, falling, or holding steady over the past 12 months. A consistently rising score signals a package that is getting harder to trust.' },
 ]
@@ -84,14 +84,18 @@ function getPrimaryRiskDriver({ cves = [], maintainer, trend_direction, trend_hi
       : { label:'CRITICAL', text:`${criticalCves.length} critical ${criticalCves.length === 1 ? 'vulnerability' : 'vulnerabilities'} — upgrade recommended` }
   }
 
-  if (maintainer?.activity_label === 'ABANDONED') {
+  if (maintainer?.activity_label === 'ARCHIVED') {
+    return { label:'ARCHIVED', text:'This repository has been archived by its maintainer — confirmed no longer maintained' }
+  }
+
+  if (maintainer?.activity_label === 'DORMANT') {
     if (maintainer.days_since_last_commit) {
       const years  = Math.floor(maintainer.days_since_last_commit / 365)
       const months = Math.floor((maintainer.days_since_last_commit % 365) / 30)
       const time   = years >= 1 ? `${years}+ year${years > 1 ? 's' : ''}` : `${months}+ months`
-      return { label:'ABANDONED', text:`No code updates in ${time} — this package may no longer be maintained` }
+      return { label:'DORMANT', text:`No code updates in ${time} — maintenance status is unclear, worth investigating before you rely on this` }
     }
-    return { label:'ABANDONED', text:'No active maintainer detected — this package may no longer be maintained' }
+    return { label:'DORMANT', text:'No maintainer activity data available — maintenance status is unclear' }
   }
 
   if (maintainer?.activity_label === 'STALE' && (risk_label === 'CRITICAL' || risk_label === 'HIGH')) {
@@ -168,9 +172,11 @@ function generateTldr({ blast_radius_count, cves = [], maintainer, risk_label, t
     state = `${cves.length} known vulnerabilit${cves.length === 1 ? 'y' : 'ies'} — ${patched.length} fixable by upgrading to v${sv}, ${unpatched.length} with no patch yet.`
   else if (cves.length > 0)
     state = `${cves.length} known vulnerabilit${cves.length === 1 ? 'y' : 'ies'} with no patches available yet.`
-  else if (maintainer?.activity_label === 'ABANDONED') {
+  else if (maintainer?.activity_label === 'ARCHIVED') {
+    state = `No known CVEs, but the repository is archived — no one will patch a future vulnerability.`
+  } else if (maintainer?.activity_label === 'DORMANT') {
     const yrs = maintainer.days_since_last_commit ? Math.floor(maintainer.days_since_last_commit / 365) : null
-    state = `No known CVEs, but unmaintained${yrs ? ` for ${yrs}+ year${yrs > 1 ? 's' : ''}` : ''} — no one will patch a future vulnerability.`
+    state = `No known CVEs, but no commits${yrs ? ` for ${yrs}+ year${yrs > 1 ? 's' : ''}` : ''} — unclear if a future vulnerability would get patched.`
   } else {
     state = `No known vulnerabilities and actively maintained.`
   }
@@ -189,8 +195,10 @@ function generateTldr({ blast_radius_count, cves = [], maintainer, risk_label, t
     conclusion = `Upgrading to v${sv} fixes ${patched.length} of ${cves.length} vulnerabilities. The remaining ${unpatched.length} have no patch yet — keep watching the CVE feed.`
   else if (cves.length > 0 && !sv)
     conclusion = `No fix has been released yet. Avoid using this package in security-sensitive contexts until a patch lands.`
-  else if (maintainer?.activity_label === 'ABANDONED')
-    conclusion = `No current vulnerabilities, but nobody is watching this project. Start planning a replacement — a CVE here means waiting forever for a fix.`
+  else if (maintainer?.activity_label === 'ARCHIVED')
+    conclusion = `No current vulnerabilities, but this repository is archived — confirmed nobody is watching it. Start planning a replacement.`
+  else if (maintainer?.activity_label === 'DORMANT')
+    conclusion = `No current vulnerabilities, but there's been no recent commit activity — worth checking in on before depending on it further.`
   else if (blast_radius_count > 500 && risk_label === 'LOW')
     conclusion = `Widely depended on and currently clean. Low risk today, but worth keeping on your radar given how many projects rely on it.`
   else if (trend_direction === 'RISING')
@@ -312,7 +320,7 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
     blast_radius_count > 0 && { text:`${blast_radius_count.toLocaleString()} downstream`, color:'#FF2D9A', tooltip:`${blast_radius_count.toLocaleString()} other packages depend on this one. If it fails or is compromised, all of them are potentially affected.` },
     direct_dependencies.length > 0 && { text:`${direct_dependencies.length} deps`, color:'#00D4FF', tooltip:`This package relies on ${direct_dependencies.length} other librar${direct_dependencies.length===1?'y':'ies'} to function.` },
     cves.length > 0 && { text:`${cves.length} CVEs`, color:RISK_COLORS.MEDIUM, tooltip:`${cves.length} Common Vulnerabilit${cves.length===1?'y':'ies'} and Exposure${cves.length===1?'':'s'} — publicly known security flaws found in this package.` },
-    maintainer?.activity_label && { text:maintainer.activity_label, color:ACTIVITY_COLORS[maintainer.activity_label]??C.muted, tooltip:'How actively this package is being maintained. ABANDONED means no code updates in 2+ years.' },
+    maintainer?.activity_label && { text:maintainer.activity_label, color:ACTIVITY_COLORS[maintainer.activity_label]??C.muted, tooltip:'How actively this package is being maintained. DORMANT means no code updates in 1+ year (inferred, not confirmed). ARCHIVED means GitHub itself has marked the repository read-only.' },
     maintainer?.days_since_last_commit != null && {
       text: maintainer.days_since_last_commit < 1    ? 'commit today'
           : maintainer.days_since_last_commit < 30   ? `${maintainer.days_since_last_commit}d ago`

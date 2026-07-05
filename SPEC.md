@@ -153,14 +153,15 @@ Transition rules:
 | contributors_count | INT64 | |
 | is_archived | BOOL | |
 | is_fork | BOOL | |
-| activity_label | STRING | ACTIVE / SLOW / STALE / ABANDONED |
+| activity_label | STRING | ACTIVE / SLOW / STALE / DORMANT / ARCHIVED |
 | last_updated_at | TIMESTAMP | |
 
 Activity label thresholds (CASE logic in stg_github_maintainers):
 - ACTIVE: days_since_last_commit <= 30 AND is_archived = FALSE
 - SLOW: 31–90 days AND is_archived = FALSE
 - STALE: 91–365 days AND is_archived = FALSE
-- ABANDONED: 365+ days OR is_archived = TRUE
+- DORMANT: 365+ days AND is_archived = FALSE (inferred — could mean neglected, or just stable)
+- ARCHIVED: is_archived = TRUE (GitHub-confirmed, checked first, overrides the day-count buckets)
 
 **fact_dependencies**
 | Column | Type | Notes |

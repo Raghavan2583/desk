@@ -48,10 +48,10 @@ SELECT
     license_spdx,
     created_at,
     CASE
-        WHEN is_archived = TRUE                   THEN 'ABANDONED'
+        WHEN is_archived = TRUE                   THEN 'ARCHIVED'   -- GitHub-confirmed, not inferred
         WHEN days_since_last_commit <= 30         THEN 'ACTIVE'
         WHEN days_since_last_commit <= 90         THEN 'SLOW'
         WHEN days_since_last_commit <= 365        THEN 'STALE'
-        ELSE                                           'ABANDONED'  -- 365+ days or NULL commit date
+        ELSE                                           'DORMANT'    -- 365+ days or NULL commit date - inferred, not confirmed abandoned
     END AS activity_label
 FROM with_days
