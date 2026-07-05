@@ -43,7 +43,7 @@ DESK pulls data from four public sources every day:
 | OSV.dev | CVE vulnerabilities per package, severity |
 | deps.dev | Dependency graph edges, transitive depth |
 
-This data is stored in **BigQuery**, transformed using **dbt**, and the final risk score is computed using a weighted formula:
+This data is stored in **DuckDB**, transformed using **dbt**, and the final risk score is computed using a weighted formula:
 
 > **Risk Score = Maintainer Activity (40%) + CVE Count (30%) + Dependency Depth (20%) + Download Trend (10%)**
 
@@ -59,7 +59,7 @@ The output is a **React frontend** with an interactive graph, risk score card, m
 
 - Python ecosystem (PyPI) — top 1,000 packages by download count
 - 5 outputs per package: blast radius graph, risk score card, maintainer card, 12-month trend line, blast radius count
-- Event-driven refresh on new PyPI releases + 24-hour GitHub maintainer check
+- Daily full pipeline refresh + 24-hour GitHub maintainer check
 - Fully automated pipeline: zero manual intervention after deployment
 - Public frontend on Vercel — no login, no accounts, no friction
 
@@ -79,7 +79,7 @@ The output is a **React frontend** with an interactive graph, risk score card, m
 
 | Layer | Technology | Why |
 |---|---|---|
-| Storage | BigQuery (GCP) | Existing account, free tier sufficient for MVP, native dbt support |
+| Storage | DuckDB | In-process, no server or account, runs free inside GitHub Actions |
 | Transform | dbt Core | Industry standard, free, runs on GitHub Actions |
 | Scheduler | GitHub Actions | Free tier (2,000 min/month), no extra infrastructure |
 | Frontend | React + React Flow | Purpose-built for graph visualisation, free, professional output |
@@ -99,13 +99,13 @@ Blueprint designs the complete data model, ingestion pipeline, dbt layer structu
 Striker builds in 12 strict increments — each tested and Guardian-approved before the next begins. Nothing merges without explicit quality sign-off.
 
 Key increments:
-1. BigQuery schema and dataset setup
+1. DuckDB schema setup
 2–5. Four ingestion scripts (PyPI, GitHub, OSV, deps.dev)
 6–8. dbt models (staging → intermediate → mart)
 9. Risk scoring engine with trend calculation
 10. JSON graph export for frontend
 11. React frontend with graph visualisation
-12. GitHub Actions workflows (daily refresh + event trigger)
+12. GitHub Actions workflows (daily refresh)
 
 ### Phase 3 — Deploy
 Operator configures GCP, GitHub secrets, and Vercel. Initial data load of 1,000 packages. End-to-end verification on 3 test packages before go-live.
@@ -121,11 +121,11 @@ These are real constraints we know about. None of them block the MVP. All of the
 
 ---
 
-**Limitation 1 — Data freshness depends on the event feeds**
+**Limitation 1 — Data is only as fresh as the last daily run**
 
-If PyPI's event feed is delayed or misses a release, our graph is stale and we won't know it. A compromised package could show as safe for hours.
+Everything refreshes once a day. A new release or a newly disclosed CVE won't show up until the next 02:07 UTC run — up to 24 hours of lag in the worst case.
 
-*Future fix: Add a lightweight weekly full-scan as a safety net — not every 6 hours, just weekly. Catches anything the event feeds missed.*
+*Future fix: Prioritized refresh for high-blast-radius packages only, if same-day freshness ever becomes something real users depend on. Evaluated and deliberately deferred (D065) — not worth the added pipeline complexity while nobody is relying on it yet.*
 
 ---
 
