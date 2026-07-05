@@ -25,6 +25,9 @@ session.log.md
 # Candid internal prep material — private Artifact only, not for public repo
 INTERVIEW_DEEP_DIVE.md
 
+# Personal Claude Code usage reports — not project content
+report-*.html
+
 # dbt
 dbt/target/
 dbt/logs/

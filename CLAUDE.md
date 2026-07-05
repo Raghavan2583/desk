@@ -37,6 +37,12 @@ Monitor     : schema_monitor.yml — Mondays 08:17 UTC
 Deep Dive   : https://documentary-site-xi.vercel.app (engineering deep-dive, replaced old 8-episode documentary 2026-07-05)
 
 ## Last Session
+2026-07-05 (session 2) — No DESK code changed. Confirmed /crew-start's ~70k token usage is
+mostly fixed Claude Code overhead, not crew-file bloat. Deleted 12 dead public GitHub repos
+(LeetCode, EXP-1-10-PE, Covid-Analysis-Project). Found ~/.claude is a git repo backed by
+claude-config on GitHub, which was stale — pushed the current Cricket Crew config to it and
+kept it as the config's backup.
+
 2026-07-05 — Verified D064's first daily run (success, 1h25m). Public-repo cleanup (deleted
 stale docs, added README, purged 511 dead Actions runs). Retired pypi_event_trigger.yml
 (D065) after it proved redundant and already-buggy. Rebuilt the documentary as a real
