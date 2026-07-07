@@ -5,6 +5,7 @@ sources:
     schema: desk_raw
     tables:
       - name: raw_pypi_packages
+      - name: raw_pypi_downloads
       - name: raw_github_maintainers
       - name: raw_osv_cves
       - name: raw_deps_edges

@@ -9,7 +9,7 @@ SELECT
     p.author,
     p.author_email,
     p.requires_python,
-    p.monthly_downloads,
+    dl.monthly_downloads,
     p.github_repo_url,
     p.requires_dist,
     (p.github_repo_url IS NOT NULL)  AS has_github_link,
@@ -28,5 +28,7 @@ SELECT
     g.activity_label
 
 FROM {{ ref('stg_pypi_packages') }} p
+LEFT JOIN {{ ref('stg_pypi_downloads') }} dl
+    ON p.package_name = dl.package_name
 LEFT JOIN {{ ref('stg_github_maintainers') }} g
     ON p.github_repo_url = g.github_repo_url

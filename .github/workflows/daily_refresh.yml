@@ -1,4 +1,12 @@
 name: Daily Pipeline Refresh
+# D068: split into isolated per-source jobs so a single flaky external API
+# (e.g. the 6 July 2026 pypistats.org incident, where 100% of requests
+# 429'd for 2 hours and the old single-job pipeline's 120-min timeout
+# cancelled the ENTIRE run — GitHub, OSV, deps.dev, dbt, scoring, export,
+# and deploy included, none of which touch pypistats.org) can no longer
+# take down the whole day's refresh. Each ingestion source now runs as its
+# own job with its own bounded timeout; transform_and_deploy proceeds with
+# whatever data is actually available.
 
 on:
   schedule:
@@ -12,44 +20,223 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  DESK_DB_PATH: data/desk.duckdb
+  PYTHONPATH: ${{ github.workspace }}
+  DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+
 jobs:
-  full_refresh:
+  # ── Prerequisite: everything else depends on PyPI metadata + a seeded
+  #    queue existing (github needs github_repo_url, deps_dev needs
+  #    requires_dist, osv/downloads need the package list from
+  #    scheduler_queue). No pypistats.org calls happen here — that's the
+  #    "downloads" job below — so this step stays fast and reliable.
+  metadata:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-
+    timeout-minutes: 30
     env:
-      DESK_DB_PATH: data/desk.duckdb
-      GITHUB_TOKENS: '["${{ secrets.GH_TOKEN_1 }}"]'
       PYPI_TOP_N: "1000"
-      RISK_SCORE_VERSION: "1"
-      PYTHONPATH: ${{ github.workspace }}
-      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
-
+      GITHUB_TOKENS: '["${{ secrets.GH_TOKEN_1 }}"]'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
 
       - name: Ingest — PyPI metadata
         run: python ingestion/pypi_ingest.py
 
+      - name: Export tables for downstream jobs
+        run: >
+          python ingestion/export_to_artifact.py --dir artifact_out
+          --table desk_raw.raw_pypi_packages --table desk_prod.scheduler_queue
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desk-pypi-metadata
+          path: artifact_out/
+          retention-days: 1
+
+  # ── The pypistats.org-flaky part, isolated in its own job/timeout so a
+  #    systemic outage (D068 incident) can no longer block anything else.
+  downloads:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with: { name: desk-pypi-metadata, path: artifact_in }
+
+      - name: Hydrate DB — scheduler_queue
+        run: python ingestion/hydrate_from_artifact.py --dir artifact_in --table desk_prod.scheduler_queue
+
+      - name: Ingest — PyPI download counts
+        run: python ingestion/pypi_downloads_ingest.py
+
+      - name: Export table for merge job
+        if: always()
+        run: python ingestion/export_to_artifact.py --dir artifact_out --table desk_raw.raw_pypi_downloads
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desk-downloads
+          path: artifact_out/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  github:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    env:
+      GITHUB_TOKENS: '["${{ secrets.GH_TOKEN_1 }}"]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with: { name: desk-pypi-metadata, path: artifact_in }
+
+      - name: Hydrate DB — raw_pypi_packages
+        run: python ingestion/hydrate_from_artifact.py --dir artifact_in --table desk_raw.raw_pypi_packages
+
       - name: Ingest — GitHub maintainers
         run: python ingestion/github_ingest.py
 
+      - name: Export table for merge job
+        if: always()
+        run: python ingestion/export_to_artifact.py --dir artifact_out --table desk_raw.raw_github_maintainers
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desk-github
+          path: artifact_out/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  osv:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with: { name: desk-pypi-metadata, path: artifact_in }
+
+      - name: Hydrate DB — scheduler_queue
+        run: python ingestion/hydrate_from_artifact.py --dir artifact_in --table desk_prod.scheduler_queue
+
       - name: Ingest — OSV CVEs
-        continue-on-error: true
         run: python ingestion/osv_ingest.py
+
+      - name: Export table for merge job
+        if: always()
+        run: python ingestion/export_to_artifact.py --dir artifact_out --table desk_raw.raw_osv_cves
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desk-osv
+          path: artifact_out/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  deps_dev:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with: { name: desk-pypi-metadata, path: artifact_in }
+
+      - name: Hydrate DB — raw_pypi_packages
+        run: python ingestion/hydrate_from_artifact.py --dir artifact_in --table desk_raw.raw_pypi_packages
 
       - name: Ingest — deps.dev dependency graph
         run: python ingestion/deps_dev_ingest.py
+
+      - name: Export tables for merge job
+        if: always()
+        run: >
+          python ingestion/export_to_artifact.py --dir artifact_out
+          --table desk_raw.raw_deps_edges --table desk_raw.raw_deps_dependents
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desk-deps
+          path: artifact_out/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ── Runs with whatever data is actually available. Gated only on
+  #    metadata's success (nothing else can be scored/exported/deployed
+  #    without it) — NOT on downloads/github/osv/deps_dev, each of which
+  #    is allowed to fail independently; scoring's existing CARRIED_FORWARD
+  #    fallback (D059) covers a missing source for the day.
+  transform_and_deploy:
+    needs: [metadata, downloads, github, osv, deps_dev]
+    if: ${{ always() && needs.metadata.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RISK_SCORE_VERSION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with: { name: desk-pypi-metadata, path: artifacts/desk-pypi-metadata }
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: desk-downloads, path: artifacts/desk-downloads }
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: desk-github, path: artifacts/desk-github }
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: desk-osv, path: artifacts/desk-osv }
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: desk-deps, path: artifacts/desk-deps }
+
+      - name: Hydrate DB from all available upstream artifacts
+        run: |
+          python ingestion/hydrate_from_artifact.py --dir artifacts/desk-pypi-metadata \
+            --table desk_raw.raw_pypi_packages --table desk_prod.scheduler_queue
+          python ingestion/hydrate_from_artifact.py --dir artifacts/desk-downloads --table desk_raw.raw_pypi_downloads
+          python ingestion/hydrate_from_artifact.py --dir artifacts/desk-github --table desk_raw.raw_github_maintainers
+          python ingestion/hydrate_from_artifact.py --dir artifacts/desk-osv --table desk_raw.raw_osv_cves
+          python ingestion/hydrate_from_artifact.py --dir artifacts/desk-deps \
+            --table desk_raw.raw_deps_edges --table desk_raw.raw_deps_dependents
 
       - name: Transform — dbt build (prod)
         run: dbt build --target prod --project-dir dbt --profiles-dir dbt

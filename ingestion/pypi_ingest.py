@@ -1,17 +1,19 @@
 """
 ingestion/pypi_ingest.py
-Fetches package metadata from PyPI JSON API and pypistats.org.
-Seeds the scheduler_queue from hugovk top-1000 list on every run (DuckDB is
-ephemeral — queue must be seeded fresh each pipeline execution).
-Every package in the queue is re-fetched and re-written each run (needed
-since download counts are refreshed daily for all packages — see below).
+Fetches package metadata from the PyPI JSON API only — name, version,
+summary, requires_dist, project_urls, github_repo_url. Seeds the
+scheduler_queue from the hugovk top-1000 list on every run (DuckDB is
+ephemeral — queue must be seeded fresh each pipeline execution). This is
+the prerequisite job every other ingestion source (github, osv, deps_dev,
+downloads) depends on — see daily_refresh.yml's job graph (D068).
 
-Download counts (pypistats.org) are checked for all 1,000 packages every
-run, paced DOWNLOADS_REQ_DELAY seconds apart to stay under pypistats.org's
-30 requests/minute site-wide limit (see D061, D064). Any individual
-package whose fetch still fails (rate-limited despite retries, network
-error) falls back to scoring/risk_score.py carrying forward the last known
-real count (with its real date) from download_history.parquet.
+Monthly download counts are fetched separately by
+ingestion/pypi_downloads_ingest.py, as its own GitHub Actions job. They
+used to live in this same per-package loop, but pypistats.org's flakiness
+(D061, D064) meant a bad day there could burn this whole step's time
+budget and, since this step gated everything else, cancel the entire
+day's pipeline (D068 — the 6 July 2026 incident: pypistats.org 429'd
+100% of requests for 2 hours straight).
 
 Usage:
     DESK_DB_PATH=data/desk.duckdb python ingestion/pypi_ingest.py
@@ -35,11 +37,6 @@ logger = logging.getLogger(__name__)
 
 _PACKAGES_URL = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
 TOP_N = int(os.environ.get("PYPI_TOP_N", "1000"))
-
-# pypistats.org allows 30 req/min site-wide — 1,000 requests spaced 3s
-# apart is ~20/min, safely under that with margin for jitter/retries,
-# sustained across the whole run (~50 min for all 1,000 packages).
-DOWNLOADS_REQ_DELAY   = 3.0
 
 # ── GitHub Search fallback ────────────────────────────────────────────────── #
 
@@ -153,21 +150,6 @@ def _search_github_url(package: str, session: requests.Session) -> str | None:
     return None
 
 
-def _get_monthly_downloads(package: str, session: requests.Session) -> int:
-    url = f"https://pypistats.org/api/packages/{package}/recent"
-    response = session.get(url, timeout=10)
-    response.raise_for_status()
-    return response.json()["data"]["last_month"]
-
-
-def _fetch_monthly_downloads(package: str, session: requests.Session) -> int | None:
-    try:
-        return retry_with_backoff(_get_monthly_downloads, package, session)
-    except Exception as exc:
-        logger.warning("pypistats unavailable for %s: %s", package, exc)
-        return None
-
-
 def _normalize_github_url(url: str) -> str | None:
     match = re.search(r"github\.com/([^/\s#?]+/[^/\s#?.]+)", url)
     if not match:
@@ -198,7 +180,6 @@ def _extract_github_url(info: dict) -> str | None:
 
 def _build_row(
     data: dict,
-    monthly_downloads: int | None,
     github_url: str | None = None,
 ) -> dict:
     info = data["info"]
@@ -212,7 +193,6 @@ def _build_row(
         "requires_python":   info.get("requires_python"),
         "requires_dist":     json.dumps(info.get("requires_dist")),
         "project_urls":      json.dumps(info.get("project_urls")),
-        "monthly_downloads": monthly_downloads,
         "github_repo_url":   github_url if github_url is not None else _extract_github_url(info),
         "raw_payload":       json.dumps(data),
     }
@@ -240,14 +220,12 @@ def main() -> None:
                 if i % 100 == 0:
                     logger.info("progress: %d/%d packages", i, len(packages))
                 try:
-                    data      = _fetch_pypi(package, session)
-                    downloads = _fetch_monthly_downloads(package, session)
-                    time.sleep(DOWNLOADS_REQ_DELAY)
-                    gh_url    = _extract_github_url(data["info"])
+                    data   = _fetch_pypi(package, session)
+                    gh_url = _extract_github_url(data["info"])
                     if not gh_url:
                         gh_url = _search_github_url(package, session)
 
-                    rows.append(_build_row(data, downloads, github_url=gh_url))
+                    rows.append(_build_row(data, github_url=gh_url))
                     completed.append(package)
 
                 except Exception as exc:

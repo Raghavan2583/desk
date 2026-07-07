@@ -51,9 +51,15 @@ def _create_raw_tables(conn: duckdb.DuckDBPyConnection) -> None:
             requires_python   VARCHAR,
             requires_dist     VARCHAR,
             project_urls      VARCHAR,
-            monthly_downloads BIGINT,
             github_repo_url   VARCHAR,
             raw_payload       VARCHAR
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS desk_raw.raw_pypi_downloads (
+            ingested_at       TIMESTAMPTZ NOT NULL,
+            package_name      VARCHAR     NOT NULL,
+            monthly_downloads BIGINT
         )
     """)
     conn.execute("""
@@ -119,11 +125,12 @@ def _create_queue_table(conn: duckdb.DuckDBPyConnection) -> None:
         CREATE TABLE IF NOT EXISTS desk_prod.scheduler_queue (
             package_name          VARCHAR NOT NULL,
             priority              BIGINT  NOT NULL DEFAULT 1,
-            last_pypi_ingest_at   TIMESTAMPTZ,
-            last_github_ingest_at TIMESTAMPTZ,
-            last_osv_ingest_at    TIMESTAMPTZ,
-            last_deps_ingest_at   TIMESTAMPTZ,
-            next_github_check_at  TIMESTAMPTZ,
+            last_pypi_ingest_at      TIMESTAMPTZ,
+            last_downloads_ingest_at TIMESTAMPTZ,
+            last_github_ingest_at    TIMESTAMPTZ,
+            last_osv_ingest_at       TIMESTAMPTZ,
+            last_deps_ingest_at      TIMESTAMPTZ,
+            next_github_check_at     TIMESTAMPTZ,
             status                VARCHAR DEFAULT 'pending',
             retry_count           BIGINT  DEFAULT 0,
             last_error            VARCHAR
@@ -157,11 +164,11 @@ def _create_fact_table(conn: duckdb.DuckDBPyConnection) -> None:
             maintainer_commit_count_90d       BIGINT,
             maintainer_is_archived            BOOLEAN,
             maintainer_activity_label         VARCHAR,
-            -- Same idea for download counts — pypistats.org's rate limit
-            -- (30 req/min) can't cover all 1,000 packages daily, so only a
-            -- rotating subset is checked each run (see pypi_ingest.py).
-            -- downloads_status distinguishes LIVE / CARRIED_FORWARD /
-            -- NEVER_VERIFIED the same way.
+            -- Same idea for download counts — all 1,000 packages are
+            -- checked every run (D064), but an individual package's
+            -- pypistats.org fetch can still fail, or the whole run can trip
+            -- pypi_downloads_ingest.py's circuit breaker (D068). downloads_status
+            -- distinguishes LIVE / CARRIED_FORWARD / NEVER_VERIFIED the same way.
             downloads_status               VARCHAR,
             downloads_last_verified_at     TIMESTAMPTZ,
             downloads_resolved_monthly     BIGINT

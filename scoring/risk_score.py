@@ -132,8 +132,10 @@ def _load_prev_downloads() -> dict[str, int]:
 
 def _load_latest_downloads() -> dict[str, dict]:
     """Most recent recorded download count per package, regardless of age —
-    used to carry forward a real count when this run's package wasn't in the
-    pypistats.org rotation batch, instead of guessing a neutral value."""
+    used to carry forward a real count when this run's fetch for the
+    package failed (pypistats.org error, or the downloads job's circuit
+    breaker tripped — see ingestion/pypi_downloads_ingest.py, D068),
+    instead of guessing a neutral value."""
     if not DOWNLOAD_HISTORY_PARQUET.exists():
         return {}
     conn_mem = duckdb.connect(":memory:")
@@ -347,13 +349,15 @@ def _resolve_maintainer(pkg: dict, prev_maintainer: dict[str, dict], computed_at
 
 def _resolve_downloads(pkg: dict, latest_downloads: dict[str, dict], computed_at: str) -> dict:
     """
-    Same idea as _resolve_maintainer, for monthly download counts: only a
-    rotating subset of packages get a live pypistats.org check each run (see
-    D058), so most packages need to carry forward their last real count
-    rather than being scored on a blank.
-      - LIVE             — this package was in today's rotation batch.
-      - CARRIED_FORWARD — not checked today, but a real prior count exists —
-                           use it, tagged with its real date.
+    Same idea as _resolve_maintainer, for monthly download counts: all 1,000
+    tracked packages are attempted every run (D064), but an individual
+    package's pypistats.org fetch can still fail, or the whole run can trip
+    the downloads job's circuit breaker (D068) — either way, that package
+    needs to carry forward its last real count rather than being scored on
+    a blank.
+      - LIVE             — this run's fetch for the package succeeded.
+      - CARRIED_FORWARD — this run's fetch failed, but a real prior count
+                           exists — use it, tagged with its real date.
       - NEVER_VERIFIED  — no download count has ever been recorded.
     """
     if pkg["monthly_downloads"] is not None:

@@ -332,12 +332,14 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
     downloads_status && {
       text: downloads_status === 'NEVER_VERIFIED'
         ? 'DOWNLOADS UNVERIFIED'
+        : downloads_status === 'CARRIED_FORWARD'
+        ? `⚠ ${(monthly_downloads ?? 0).toLocaleString()} downloads/mo (previous)`
         : `${(monthly_downloads ?? 0).toLocaleString()} downloads/mo`,
-      color: C.muted,
+      color: downloads_status === 'CARRIED_FORWARD' ? RISK_COLORS.MEDIUM : C.muted,
       tooltip: downloads_status === 'NEVER_VERIFIED'
         ? 'Download count has never been successfully verified for this package.'
         : downloads_status === 'CARRIED_FORWARD'
-        ? `Download count last verified ${timeAgo(downloads_last_verified_at) ?? 'previously'}. DESK rechecks ~40 packages/day on rotation, so this figure is carried forward until its next scheduled check.`
+        ? `Download count last verified ${timeAgo(downloads_last_verified_at) ?? 'previously'}. DESK checks all 1,000 tracked packages every day; this package's check specifically failed, so this is the last real count on record, not today's.`
         : `Monthly downloads, verified ${timeAgo(downloads_last_verified_at) ?? 'today'}.`,
     },
   ].filter(Boolean)
@@ -405,8 +407,8 @@ export default function RiskScoreCard({ packageData, onNavigate }) {
             ))}
           </div>
           {downloads_status === 'CARRIED_FORWARD' && (
-            <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>
-              ↻ Downloads last verified {timeAgo(downloads_last_verified_at) ?? 'previously'} — DESK rechecks ~40 packages/day on rotation
+            <div style={{ fontSize:10, color:RISK_COLORS.MEDIUM, marginTop:6 }}>
+              ⚠ Showing the previous download count, verified {timeAgo(downloads_last_verified_at) ?? 'previously'} — today's pypistats.org check failed
             </div>
           )}
         </div>

@@ -6,7 +6,6 @@ WITH deduped AS (
         author,
         author_email,
         requires_python,
-        monthly_downloads,
         github_repo_url,
         requires_dist,
         ROW_NUMBER() OVER (
@@ -23,7 +22,6 @@ SELECT
     author,
     author_email,
     requires_python,
-    monthly_downloads,
     github_repo_url,
     requires_dist
 FROM deduped
